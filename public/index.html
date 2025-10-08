@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KryptoConnect - Secure Crypto Chat</title>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Your CSS File -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Socket.io Client Library -->
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <i class="fas fa-comments"></i>
+            </div>
+            <h1>KryptoConnect</h1>
+            <p class="tagline">Secure, encrypted chat for the crypto community</p>
+        </header>
+
+        <div class="app-container">
+            <!-- Authentication Section -->
+            <section class="auth-section" id="authSection">
+                <div class="auth-form" id="loginForm">
+                    <h2>Welcome Back!</h2>
+                    <div class="form-group">
+                        <label for="loginUsername">Username</label>
+                        <input type="text" id="loginUsername" placeholder="Enter your username">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" placeholder="Enter your password">
+                    </div>
+                    <button class="btn" id="loginBtn">Login</button>
+                    <div class="error-message" id="loginError"></div>
+                    <div class="auth-toggle">
+                        Don't have an account? <span id="showRegister">Register</span>
+                    </div>
+                </div>
+
+                <div class="auth-form" id="registerForm" style="display: none;">
+                    <h2>Create Account</h2>
+                    <div class="form-group">
+                        <label for="regUsername">Username</label>
+                        <input type="text" id="regUsername" placeholder="Choose a username">
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword">Password</label>
+                        <input type="password" id="regPassword" placeholder="Create a password">
+                    </div>
+                    <div class="form-group">
+                        <label for="regConfirmPassword">Confirm Password</label>
+                        <input type="password" id="regConfirmPassword" placeholder="Confirm your password">
+                    </div>
+                    <button class="btn" id="registerBtn">Register</button>
+                    <div class="error-message" id="regError"></div>
+                    <div class="auth-toggle">
+                        Already have an account? <span id="showLogin">Login</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Chat Section -->
+            <section class="chat-section" id="chatSection" style="display: none;">
+                <div class="chat-header">
+                    <div class="chat-title">KryptoConnect Chat</div>
+                    <div class="user-info">
+                        <div class="user-avatar" id="userAvatar">U</div>
+                        <span id="usernameDisplay">User</span>
+                        <button class="logout-btn" id="logoutBtn">Logout</button>
+                    </div>
+                </div>
+                
+                <div class="chat-container">
+                    <div class="sidebar">
+                        <div class="sidebar-section">
+                            <h3 class="sidebar-title">
+                                My Friends
+                                <button class="add-friend-btn" id="addFriendBtn" title="Add Friend">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            </h3>
+                            <ul class="users-list" id="friendsList">
+                                <!-- Friends will be populated by JavaScript -->
+                            </ul>
+                        </div>
+                        
+                        <div class="sidebar-section">
+                            <h3 class="sidebar-title">All Users</h3>
+                            <ul class="users-list" id="usersList">
+                                <!-- Other users will be populated by JavaScript -->
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="chat-main">
+                        <div class="chat-with-info" id="chatWithInfo" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="user-status"></div>
+                                <span id="chatWithName">User</span>
+                            </div>
+                            <div class="chat-actions">
+                                <button class="btn-secondary" id="clearChatBtn">Clear Chat</button>
+                            </div>
+                        </div>
+                        
+                        <div class="messages-container" id="messagesContainer">
+                            <div class="no-chat-selected" id="noChatSelected">
+                                <div>
+                                    <i class="fas fa-comments" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
+                                    <h3>Welcome to KryptoConnect!</h3>
+                                    <p>Select a friend from your list to start chatting or add new friends using the + button.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="typing-indicator" id="typingIndicator"></div>
+                        
+                        <div class="message-input-container">
+                            <input type="text" class="message-input" id="messageInput" placeholder="Select a friend to start chatting..." disabled>
+                            <button class="send-btn" id="sendBtn" disabled>Send</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Features Section -->
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-lock"></i>
+                </div>
+                <h3 class="feature-title">End-to-End Encryption</h3>
+                <p>Your messages are secured with military-grade encryption. Only you and the recipient can read them.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-user-friends"></i>
+                </div>
+                <h3 class="feature-title">Friends System</h3>
+                <p>Add friends to your network and chat with them privately. Manage your friend list easily.</p>
+            </div>
+            
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <h3 class="feature-title">Real-time Chat</h3>
+                <p>Experience real-time messaging with friends. See when they're typing and get instant replies.</p>
+            </div>
+        </div>
+
+        <!-- Add Friend Modal -->
+        <div class="modal" id="addFriendModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Add Friend</h3>
+                    <button class="close-modal" id="closeModal">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label for="friendUsername">Username</label>
+                    <input type="text" id="friendUsername" placeholder="Enter username to add as friend">
+                </div>
+                <button class="btn" id="sendFriendRequestBtn">Send Friend Request</button>
+                <div class="error-message" id="friendError"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Your JavaScript File -->
+    <script src="client.js"></script>
+</body>
+</html>

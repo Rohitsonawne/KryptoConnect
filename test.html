@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Connection Test</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Connection Test</h1>
+    <div id="status">Testing...</div>
+    <button onclick="testAPI()">Test API</button>
+    <button onclick="testSocket()">Test Socket</button>
+    
+    <script>
+        const isDevelopment = window.location.port === '5500' || window.location.hostname === '127.0.0.1';
+        const API_BASE_URL = isDevelopment ? 'http://localhost:3000' : window.location.protocol + '//' + window.location.host;
+        const socket = isDevelopment ? io('http://localhost:3000') : io();
+        
+        document.getElementById('status').innerHTML = `
+            <p>Current location: ${window.location.href}</p>
+            <p>Is Development: ${isDevelopment}</p>
+            <p>API Base URL: ${API_BASE_URL}</p>
+            <p>Socket URL: ${isDevelopment ? 'http://localhost:3000' : 'current origin'}</p>
+        `;
+        
+        socket.on('connect', () => {
+            console.log('✅ Socket connected!');
+            document.getElementById('status').innerHTML += '<p style="color: green;">✅ Socket Connected!</p>';
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('❌ Socket disconnected!');
+            document.getElementById('status').innerHTML += '<p style="color: red;">❌ Socket Disconnected!</p>';
+        });
+        
+        socket.on('connect_error', (error) => {
+            console.log('❌ Socket connection error:', error);
+            document.getElementById('status').innerHTML += `<p style="color: red;">❌ Socket Error: ${error}</p>`;
+        });
+        
+        async function testAPI() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/users`);
+                const data = await response.json();
+                console.log('API Response:', data);
+                document.getElementById('status').innerHTML += `<p style="color: green;">✅ API Works: ${JSON.stringify(data)}</p>`;
+            } catch (error) {
+                console.error('API Error:', error);
+                document.getElementById('status').innerHTML += `<p style="color: red;">❌ API Error: ${error.message}</p>`;
+            }
+        }
+        
+        function testSocket() {
+            socket.emit('test', 'Hello Server!');
+            document.getElementById('status').innerHTML += '<p>📤 Sent test message to server</p>';
+        }
+    </script>
+</body>
+</html>
