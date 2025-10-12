@@ -507,7 +507,7 @@ function addMessageToChat(sender, text, time, isSender) {
     messageElement.className = `message ${isSender ? 'sent' : 'received'}`;
     
     messageElement.innerHTML = `
-        ${!isSender ? `<div class="message-sender">${escapeHTML(sender)}</div>` : ''}
+        ${!isSender ? `<div class="message-sender">${escapeHTML(sender)}</div>` : '<div class="message-sender">You</div>'}
         <div class="message-text">${escapeHTML(text)}</div>
         <div class="message-time">${time}</div>
     `;
