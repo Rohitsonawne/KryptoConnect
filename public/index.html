@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="style.css">
     
     <!-- Socket.io Client Library -->
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <div class="container">
@@ -122,9 +122,48 @@
                         
                         <div class="typing-indicator" id="typingIndicator"></div>
                         
+                        <!-- UPDATED MESSAGE INPUT SECTION WITH FILE UPLOAD -->
                         <div class="message-input-container">
-                            <input type="text" class="message-input" id="messageInput" placeholder="Select a friend to start chatting..." disabled>
-                            <button class="send-btn" id="sendBtn" disabled>Send</button>
+                            <!-- File upload section -->
+                            <div class="file-upload-container" id="fileUploadContainer" style="display: none;">
+                                <div class="file-input-wrapper">
+                                    <input type="file" class="file-input" id="fileInput" accept="*/*">
+                                </div>
+                                <button class="upload-btn" id="uploadBtn" disabled>
+                                    <i class="fas fa-upload"></i> Upload
+                                </button>
+                            </div>
+                            
+                            <div class="file-preview" id="filePreview">
+                                <div class="file-info">
+                                    <i class="fas fa-file file-icon" id="filePreviewIcon"></i>
+                                    <div class="file-details">
+                                        <div class="file-name" id="filePreviewName">filename.ext</div>
+                                        <div class="file-size" id="filePreviewSize">0 MB</div>
+                                    </div>
+                                    <button class="file-remove" id="fileRemoveBtn">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <img src="" class="file-preview-image" id="filePreviewImage" alt="File preview">
+                                <div class="upload-progress">
+                                    <div class="progress-bar" id="uploadProgressBar"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="upload-info" id="uploadInfo">
+                                Maximum file size: 100MB • Supported: Images, Videos, Documents
+                            </div>
+
+                            <div style="display: flex; gap: 10px; width: 100%;">
+                                <button class="btn-secondary" id="attachFileBtn" style="white-space: nowrap;">
+                                    <i class="fas fa-paperclip"></i>
+                                </button>
+                                <input type="text" class="message-input" id="messageInput" placeholder="Select a friend to start chatting..." disabled>
+                                <button class="send-btn" id="sendBtn" disabled>
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
