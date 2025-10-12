@@ -1,9 +1,6 @@
-// Development vs Production configuration
-const isDevelopment = window.location.port === '5500' || window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-const API_BASE_URL = isDevelopment ? 'http://localhost:3000' : window.location.protocol + '//' + window.location.host;
-const socket = isDevelopment ? io('http://localhost:3000') : io();
+const socket = io();
 
-// DOM Elements - KryptoConnect specific
+// DOM Elements
 const authSection = document.getElementById('authSection');
 const chatSection = document.getElementById('chatSection');
 const loginForm = document.getElementById('loginForm');
@@ -25,6 +22,18 @@ const sendBtn = document.getElementById('sendBtn');
 const chatWithInfo = document.getElementById('chatWithInfo');
 const chatWithName = document.getElementById('chatWithName');
 const noChatSelected = document.getElementById('noChatSelected');
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const filePreview = document.getElementById('filePreview');
+const filePreviewName = document.getElementById('filePreviewName');
+const filePreviewSize = document.getElementById('filePreviewSize');
+const filePreviewIcon = document.getElementById('filePreviewIcon');
+const filePreviewImage = document.getElementById('filePreviewImage');
+const fileRemoveBtn = document.getElementById('fileRemoveBtn');
+const uploadProgressBar = document.getElementById('uploadProgressBar');
+const attachFileBtn = document.getElementById('attachFileBtn');
+const fileUploadContainer = document.getElementById('fileUploadContainer');
+const uploadInfo = document.getElementById('uploadInfo');
 const typingIndicator = document.getElementById('typingIndicator');
 const addFriendBtn = document.getElementById('addFriendBtn');
 const addFriendModal = document.getElementById('addFriendModal');
@@ -40,10 +49,12 @@ let currentChatWith = null;
 let isTyping = false;
 let typingTimer = null;
 let allUsers = [];
+let selectedFile = null;
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB in bytes
 
 // Initialize Socket Events
 socket.on('connect', () => {
-    console.log('✅ Connected to server');
+    console.log('✅ Connected to server with ID:', socket.id);
     if (currentUser) {
         socket.emit('userLogin', currentUser);
     }
@@ -64,8 +75,18 @@ socket.on('userOffline', (username) => {
 });
 
 socket.on('chatMessage', (data) => {
-    if (data.from === currentChatWith) {
-        addMessageToChat(data.from, data.message, data.timestamp, false);
+    console.log('📨 Message received:', data);
+    if (data.from === currentChatWith || data.to === currentChatWith) {
+        addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from !== currentUser);
+        saveChatMessage(currentUser, currentChatWith, {
+            sender: data.from,
+            text: data.message,
+            time: formatTime(data.timestamp),
+            timestamp: data.timestamp
+        });
+        
+        // Ensure input remains visible after receiving message
+        setTimeout(ensureInputVisible, 100);
     }
 });
 
@@ -81,8 +102,76 @@ socket.on('typingStop', (data) => {
     }
 });
 
+// Friend request events
 socket.on('friendRequest', (data) => {
-    showFriendRequestNotification(data.from);
+    console.log('📩 Friend request received:', data);
+    if (data.to === currentUser) {
+        showFriendRequestNotification(data.from);
+    }
+});
+
+socket.on('friendRequestForUser', (data) => {
+    console.log('📩 Friend request for user:', data);
+    if (data.to === currentUser) {
+        console.log('✅ This friend request is for me!');
+        showFriendRequestNotification(data.from);
+    }
+});
+
+socket.on('friendRequestSent', (data) => {
+    console.log('✅ Friend request sent to:', data.to);
+    showNotification(`Friend request sent to ${data.to}`, 'success');
+    renderUsersList();
+});
+
+socket.on('friendRequestError', (data) => {
+    console.log('❌ Friend request error:', data.error);
+    showNotification(data.error, 'error');
+});
+
+socket.on('friendRequestAccepted', (data) => {
+    console.log('✅ Friend request accepted:', data);
+    if (data.to === currentUser) {
+        loadFriendsList();
+        renderUsersList();
+        showNotification(`${data.from} accepted your friend request!`, 'success');
+    }
+});
+
+socket.on('friendRequestRejected', (data) => {
+    console.log('❌ Friend request rejected by:', data.from);
+    showNotification(`${data.from} rejected your friend request`, 'info');
+});
+
+socket.on('friendRemoved', (data) => {
+    console.log('🗑️ Friend removed you:', data.from);
+    showNotification(`${data.from} removed you from friends`, 'info');
+    loadFriendsList();
+    renderUsersList();
+});
+
+// File upload events
+socket.on('fileUpload', (fileData) => {
+    console.log('📁 File received:', fileData);
+    if ((fileData.to === currentUser && fileData.from === currentChatWith) || 
+        (fileData.from === currentUser && fileData.to === currentChatWith)) {
+        addFileMessageToChat(fileData, fileData.from !== currentUser);
+        saveChatMessage(currentUser, currentChatWith, {
+            sender: fileData.from,
+            text: `[FILE] ${fileData.fileName}`,
+            time: formatTime(fileData.timestamp),
+            timestamp: fileData.timestamp,
+            isFile: true,
+            fileData: fileData
+        });
+        
+        // Ensure input remains visible after receiving file
+        setTimeout(ensureInputVisible, 100);
+    }
+});
+
+socket.on('fileUploadError', (data) => {
+    showNotification(data.error, 'error');
 });
 
 // Event Listeners
@@ -111,7 +200,6 @@ messageInput.addEventListener('keypress', (e) => {
 
 messageInput.addEventListener('input', handleTyping);
 
-// Friend system events
 addFriendBtn.addEventListener('click', () => {
     addFriendModal.style.display = 'flex';
 });
@@ -122,8 +210,13 @@ closeModal.addEventListener('click', () => {
 });
 
 sendFriendRequestBtn.addEventListener('click', sendFriendRequestHandler);
-
 clearChatBtn.addEventListener('click', clearChat);
+
+// File Upload Event Listeners
+attachFileBtn.addEventListener('click', toggleFileUpload);
+fileInput.addEventListener('change', handleFileSelect);
+uploadBtn.addEventListener('click', uploadFile);
+fileRemoveBtn.addEventListener('click', clearFileSelection);
 
 // Functions
 async function handleLogin() {
@@ -136,7 +229,7 @@ async function handleLogin() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/login`, {
+        const response = await fetch('/api/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -154,17 +247,14 @@ async function handleLogin() {
         loginError.textContent = '';
         currentUser = username;
         
-        // Update UI
         usernameDisplay.textContent = currentUser;
         userAvatar.textContent = currentUser.charAt(0).toUpperCase();
         
         authSection.style.display = 'none';
         chatSection.style.display = 'flex';
         
-        // Socket.io login
         socket.emit('userLogin', currentUser);
         
-        // Load users and friends
         await loadAllUsers();
         loadFriendsList();
         
@@ -202,7 +292,7 @@ async function handleRegister() {
     }
     
     try {
-        const response = await fetch(`${API_BASE_URL}/api/register`, {
+        const response = await fetch('/api/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -240,14 +330,13 @@ function handleLogout() {
     loginError.className = 'error-message';
     localStorage.removeItem('kryptoconnect_current_user');
     
-    // Socket.io disconnect
     socket.disconnect();
     socket.connect();
 }
 
 async function loadAllUsers() {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/users`);
+        const response = await fetch('/api/users');
         allUsers = await response.json();
         renderUsersList();
     } catch (error) {
@@ -259,6 +348,8 @@ function renderUsersList() {
     usersList.innerHTML = '';
     
     const friends = getFriends(currentUser);
+    const pendingRequests = getPendingRequests(currentUser);
+    
     const otherUsers = allUsers.filter(user => 
         user.username !== currentUser && !friends.includes(user.username)
     );
@@ -272,35 +363,38 @@ function renderUsersList() {
         const userElement = document.createElement('li');
         userElement.className = 'user-item';
         
+        let statusHTML = '';
+        if (pendingRequests.includes(user.username)) {
+            statusHTML = '<span style="font-size:0.7rem; color:#ffcc00;">Request Pending</span>';
+        } else {
+            statusHTML = `
+                <button class="friend-action-btn add-friend-action" title="Add Friend">
+                    <i class="fas fa-user-plus"></i>
+                </button>
+            `;
+        }
+        
         userElement.innerHTML = `
             <div class="user-info-small">
                 <div class="user-status" style="background: #00ffcc"></div>
                 <span>${escapeHTML(user.username)}</span>
             </div>
             <div class="friend-actions">
-                <button class="friend-action-btn add-friend-action" title="Add Friend">
-                    <i class="fas fa-user-plus"></i>
-                </button>
+                ${statusHTML}
             </div>
         `;
         
-        // ✅ YAHIN ADD KARO - CLICK EVENT LISTENER
         userElement.addEventListener('click', () => {
-            console.log('Clicked on user:', user.username);
             startChatWith(user.username);
         });
         
-        userElement.querySelector('.add-friend-action').addEventListener('click', (e) => {
-            e.stopPropagation();
-            sendFriendRequest(currentUser, user.username);
-            userElement.innerHTML = `
-                <div class="user-info-small">
-                    <div class="user-status" style="background: #ffcc00"></div>
-                    <span>${escapeHTML(user.username)}</span>
-                </div>
-                <span style="font-size:0.7rem; color:#ffcc00;">Request Sent</span>
-            `;
-        });
+        const addBtn = userElement.querySelector('.add-friend-action');
+        if (addBtn) {
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                sendFriendRequest(currentUser, user.username);
+            });
+        }
         
         usersList.appendChild(userElement);
     });
@@ -343,6 +437,7 @@ function loadFriendsList() {
         friendElement.querySelector('.remove-friend-action').addEventListener('click', (e) => {
             e.stopPropagation();
             removeFriend(currentUser, friend);
+            socket.emit('removeFriend', { from: currentUser, friend: friend });
             loadFriendsList();
             renderUsersList();
         });
@@ -360,18 +455,30 @@ function startChatWith(username) {
     sendBtn.disabled = false;
     messageInput.placeholder = `Message ${username}...`;
     messageInput.focus();
+    
+    // Hide file upload section when switching chats
+    fileUploadContainer.style.display = 'none';
+    uploadInfo.style.display = 'none';
+    clearFileSelection();
+    
     loadChatHistory(username);
+    
+    // Ensure input is visible when starting new chat
+    setTimeout(ensureInputVisible, 100);
 }
 
 function loadChatHistory(username) {
     messagesContainer.innerHTML = '';
     
-    // In a real app, you would fetch chat history from the server
     const history = getChatHistory(currentUser, username);
     
     if (history.length > 0) {
         history.forEach(message => {
-            addMessageToChat(message.sender, message.text, message.time, message.sender === currentUser);
+            if (message.isFile) {
+                addFileMessageToChat(message.fileData, message.sender === currentUser);
+            } else {
+                addMessageToChat(message.sender, message.text, message.time, message.sender === currentUser);
+            }
         });
     } else {
         const noMessages = document.createElement('div');
@@ -386,7 +493,8 @@ function loadChatHistory(username) {
         messagesContainer.appendChild(noMessages);
     }
     
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    scrollToBottom();
+    ensureInputVisible();
 }
 
 function addMessageToChat(sender, text, time, isSender) {
@@ -399,23 +507,30 @@ function addMessageToChat(sender, text, time, isSender) {
     messageElement.className = `message ${isSender ? 'sent' : 'received'}`;
     
     messageElement.innerHTML = `
-        <div class="message-sender">${isSender ? 'You' : escapeHTML(sender)}</div>
+        ${!isSender ? `<div class="message-sender">${escapeHTML(sender)}</div>` : ''}
         <div class="message-text">${escapeHTML(text)}</div>
         <div class="message-time">${time}</div>
     `;
     
     messagesContainer.appendChild(messageElement);
-    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    // Scroll to bottom only if user is near bottom
+    if (isUserNearBottom()) {
+        setTimeout(() => {
+            scrollToBottom();
+        }, 100);
+    }
 }
 
+// UPDATED: sendMessage function with input visibility fix
 function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !currentChatWith) return;
     
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const timestamp = Date.now();
+    const time = formatTime(timestamp);
     
-    // Send via Socket.io
+    // Send via Socket.IO
     socket.emit('chatMessage', {
         from: currentUser,
         to: currentChatWith,
@@ -423,17 +538,28 @@ function sendMessage() {
         timestamp: timestamp
     });
     
-    // Add to UI immediately
+    // Add message to UI immediately
     addMessageToChat(currentUser, text, time, true);
-    messageInput.value = '';
     
-    // Save to local storage (for persistence)
+    // Save to local storage
     saveChatMessage(currentUser, currentChatWith, {
         sender: currentUser,
         text: text,
         time: time,
         timestamp: timestamp
     });
+    
+    // Clear input and focus
+    messageInput.value = '';
+    messageInput.focus();
+    
+    // Stop typing indicator
+    clearTimeout(typingTimer);
+    isTyping = false;
+    socket.emit('typingStop', { from: currentUser, to: currentChatWith });
+    
+    // NEW: Ensure input remains visible after sending
+    setTimeout(ensureInputVisible, 100);
 }
 
 function handleTyping() {
@@ -451,6 +577,207 @@ function handleTyping() {
     }, 1000);
 }
 
+// NEW: Function to ensure input remains visible
+function ensureInputVisible() {
+    const inputContainer = document.querySelector('.message-input-container');
+    if (inputContainer) {
+        inputContainer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+}
+
+// File Upload Functions
+function toggleFileUpload() {
+    if (!currentChatWith) {
+        showNotification('Please select a friend to send files', 'error');
+        return;
+    }
+    
+    if (fileUploadContainer.style.display === 'none' || !fileUploadContainer.style.display) {
+        fileUploadContainer.style.display = 'flex';
+        uploadInfo.style.display = 'block';
+    } else {
+        fileUploadContainer.style.display = 'none';
+        uploadInfo.style.display = 'none';
+        clearFileSelection();
+    }
+    
+    // Ensure input remains visible when toggling file upload
+    setTimeout(ensureInputVisible, 100);
+}
+
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // File size check
+    if (file.size > MAX_FILE_SIZE) {
+        showNotification('File size exceeds 100MB limit', 'error');
+        clearFileSelection();
+        return;
+    }
+
+    selectedFile = file;
+    updateFilePreview(file);
+    uploadBtn.disabled = false;
+    
+    // Ensure input remains visible after file selection
+    setTimeout(ensureInputVisible, 100);
+}
+
+function updateFilePreview(file) {
+    const fileSize = (file.size / (1024 * 1024)).toFixed(2);
+    
+    filePreviewName.textContent = file.name;
+    filePreviewSize.textContent = `${fileSize} MB`;
+    filePreviewIcon.className = `fas ${setFileIcon(file.name, file.type)} file-icon`;
+    
+    // Show image preview for image files
+    if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            filePreviewImage.src = e.target.result;
+            filePreviewImage.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        filePreviewImage.style.display = 'none';
+    }
+    
+    filePreview.style.display = 'block';
+}
+
+function setFileIcon(filename, fileType) {
+    const extension = filename.split('.').pop().toLowerCase();
+    
+    if (fileType.startsWith('image/')) return 'fa-file-image';
+    if (fileType.startsWith('video/')) return 'fa-file-video';
+    if (fileType.startsWith('audio/')) return 'fa-file-audio';
+    
+    switch(extension) {
+        case 'pdf': return 'fa-file-pdf';
+        case 'doc': case 'docx': return 'fa-file-word';
+        case 'xls': case 'xlsx': return 'fa-file-excel';
+        case 'ppt': case 'pptx': return 'fa-file-powerpoint';
+        case 'zip': case 'rar': return 'fa-file-archive';
+        case 'txt': return 'fa-file-alt';
+        default: return 'fa-file';
+    }
+}
+
+function clearFileSelection() {
+    fileInput.value = '';
+    selectedFile = null;
+    filePreview.style.display = 'none';
+    uploadBtn.disabled = true;
+    filePreviewImage.style.display = 'none';
+    uploadProgressBar.style.width = '0%';
+}
+
+async function uploadFile() {
+    if (!selectedFile || !currentChatWith) {
+        showNotification('Please select a file and a friend to chat with', 'error');
+        return;
+    }
+
+    uploadBtn.disabled = true;
+    uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+    // Simulate upload progress
+    simulateUploadProgress();
+
+    try {
+        // For demo purposes, we'll simulate file upload
+        // In real app, you would upload to server and get URL
+        const fileData = {
+            fileName: selectedFile.name,
+            fileSize: selectedFile.size,
+            fileType: selectedFile.type,
+            fileUrl: URL.createObjectURL(selectedFile), // Temporary local URL
+            from: currentUser,
+            to: currentChatWith,
+            timestamp: Date.now()
+        };
+
+        // Send file data via socket
+        socket.emit('fileUpload', fileData);
+
+        // Add file message to chat
+        addFileMessageToChat(fileData, true);
+
+        // Save to local storage
+        saveChatMessage(currentUser, currentChatWith, {
+            sender: currentUser,
+            text: `[FILE] ${selectedFile.name}`,
+            time: formatTime(fileData.timestamp),
+            timestamp: fileData.timestamp,
+            isFile: true,
+            fileData: fileData
+        });
+
+        showNotification('File uploaded successfully', 'success');
+        clearFileSelection();
+
+    } catch (error) {
+        console.error('Upload error:', error);
+        showNotification('File upload failed: ' + error.message, 'error');
+    } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload';
+        
+        // Ensure input remains visible after upload
+        setTimeout(ensureInputVisible, 100);
+    }
+}
+
+function simulateUploadProgress() {
+    let progress = 0;
+    const interval = setInterval(() => {
+        progress += Math.random() * 10;
+        if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+        }
+        uploadProgressBar.style.width = progress + '%';
+    }, 200);
+}
+
+function addFileMessageToChat(fileData, isSender) {
+    const noMessagesElement = messagesContainer.querySelector('.no-chat-selected');
+    if (noMessagesElement) {
+        noMessagesElement.remove();
+    }
+
+    const fileSize = (fileData.fileSize / (1024 * 1024)).toFixed(2);
+    const fileElement = document.createElement('div');
+    fileElement.className = `file-message ${isSender ? 'sent' : 'received'}`;
+    
+    fileElement.innerHTML = `
+        ${!isSender ? `<div class="message-sender">${escapeHTML(fileData.from)}</div>` : ''}
+        <div class="file-message-header">
+            <i class="fas ${setFileIcon(fileData.fileName, fileData.fileType)} file-message-icon"></i>
+            <div class="file-message-name">${escapeHTML(fileData.fileName)}</div>
+            <div class="file-message-size">${fileSize} MB</div>
+        </div>
+        <div class="file-message-actions">
+            <a href="${fileData.fileUrl}" class="download-btn" download="${fileData.fileName}">
+                <i class="fas fa-download"></i> Download
+            </a>
+        </div>
+        ${fileData.fileType.startsWith('image/') ? 
+            `<img src="${fileData.fileUrl}" class="file-preview-image" alt="${fileData.fileName}" style="display: block; max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px;">` : ''
+        }
+    `;
+
+    messagesContainer.appendChild(fileElement);
+    
+    if (isUserNearBottom()) {
+        setTimeout(() => {
+            scrollToBottom();
+        }, 100);
+    }
+}
+
+// Friend Request Functions
 function sendFriendRequestHandler() {
     const username = friendUsername.value.trim();
     
@@ -475,7 +802,6 @@ function sendFriendRequestHandler() {
         return;
     }
     
-    // Send friend request via Socket.io
     socket.emit('friendRequest', {
         from: currentUser,
         to: username
@@ -484,10 +810,62 @@ function sendFriendRequestHandler() {
     friendError.textContent = '';
     friendUsername.value = '';
     addFriendModal.style.display = 'none';
+}
+
+function sendFriendRequest(fromUser, toUser) {
+    socket.emit('friendRequest', {
+        from: fromUser,
+        to: toUser
+    });
     
-    showNotification(`Friend request sent to ${username}`, 'success');
+    savePendingRequest(toUser, fromUser);
     renderUsersList();
 }
+
+// Global functions for friend requests
+window.acceptFriendRequest = function(fromUser) {
+    socket.emit('acceptFriendRequest', {
+        from: fromUser,
+        to: currentUser
+    });
+    
+    saveFriend(currentUser, fromUser);
+    saveFriend(fromUser, currentUser);
+    
+    removePendingRequest(currentUser, fromUser);
+    
+    loadFriendsList();
+    renderUsersList();
+    
+    // Remove notification
+    const notifications = document.querySelectorAll('.friend-request-notification');
+    notifications.forEach(notif => {
+        if (notif.innerHTML.includes(fromUser)) {
+            notif.remove();
+        }
+    });
+    
+    showNotification(`You are now friends with ${fromUser}`, 'success');
+};
+
+window.rejectFriendRequest = function(fromUser) {
+    socket.emit('rejectFriendRequest', {
+        from: fromUser,
+        to: currentUser
+    });
+    
+    removePendingRequest(currentUser, fromUser);
+    
+    // Remove notification
+    const notifications = document.querySelectorAll('.friend-request-notification');
+    notifications.forEach(notif => {
+        if (notif.innerHTML.includes(fromUser)) {
+            notif.remove();
+        }
+    });
+    
+    showNotification(`Friend request from ${fromUser} rejected`, 'info');
+};
 
 function clearChat() {
     if (!currentChatWith) return;
@@ -498,25 +876,39 @@ function clearChat() {
     }
 }
 
-// Helper functions
+// Helper Functions
 function escapeHTML(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
+function formatTime(timestamp) {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 function showNotification(message, type) {
     const notification = document.createElement('div');
+    notification.className = 'notification';
     notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        background: ${type === 'success' ? 'rgba(0, 255, 204, 0.2)' : type === 'online' ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'};
-        border: 1px solid ${type === 'success' ? '#00ffcc' : type === 'online' ? '#00ff00' : '#ff0000'};
+        background: ${type === 'success' ? 'rgba(0, 255, 204, 0.2)' : 
+                     type === 'online' ? 'rgba(0, 255, 0, 0.2)' : 
+                     type === 'error' ? 'rgba(255, 0, 0, 0.2)' : 
+                     'rgba(255, 204, 0, 0.2)'};
+        border: 1px solid ${type === 'success' ? '#00ffcc' : 
+                           type === 'online' ? '#00ff00' : 
+                           type === 'error' ? '#ff0000' : 
+                           '#ffcc00'};
         border-radius: 10px;
         padding: 15px;
         z-index: 1000;
         max-width: 300px;
+        backdrop-filter: blur(10px);
+        color: white;
+        font-weight: 600;
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
@@ -530,6 +922,7 @@ function showNotification(message, type) {
 
 function showFriendRequestNotification(fromUser) {
     const notification = document.createElement('div');
+    notification.className = 'friend-request-notification';
     notification.style.cssText = `
         position: fixed;
         top: 20px;
@@ -540,14 +933,15 @@ function showFriendRequestNotification(fromUser) {
         padding: 15px;
         z-index: 1000;
         max-width: 300px;
+        backdrop-filter: blur(10px);
     `;
     
     notification.innerHTML = `
-        <h4>Friend Request</h4>
-        <p>${fromUser} wants to be your friend</p>
+        <h4 style="margin: 0 0 10px 0; color: #00ffcc;">Friend Request</h4>
+        <p style="margin: 0 0 15px 0; color: white;">${fromUser} wants to be your friend</p>
         <div style="display: flex; gap: 10px; margin-top: 10px;">
-            <button class="btn" onclick="acceptFriendRequest('${fromUser}')" style="padding: 5px 10px; font-size: 0.8rem;">Accept</button>
-            <button class="btn-secondary" onclick="this.parentElement.parentElement.remove()" style="padding: 5px 10px; font-size: 0.8rem;">Ignore</button>
+            <button class="btn-accept" onclick="acceptFriendRequest('${fromUser}')" style="padding: 8px 15px; font-size: 0.9rem; background: #00ffcc; color: #0a1929; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">Accept</button>
+            <button class="btn-reject" onclick="rejectFriendRequest('${fromUser}')" style="padding: 8px 15px; font-size: 0.9rem; background: transparent; color: #ff6b6b; border: 1px solid #ff6b6b; border-radius: 5px; cursor: pointer; font-weight: 600;">Reject</button>
         </div>
     `;
     
@@ -560,7 +954,23 @@ function showFriendRequestNotification(fromUser) {
     }, 10000);
 }
 
-// Friend management functions (using localStorage as fallback)
+// Scroll helper functions
+function isUserNearBottom() {
+    if (!messagesContainer) return true;
+    
+    const threshold = 150; // Increased threshold
+    const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
+    
+    return distanceFromBottom <= threshold;
+}
+
+function scrollToBottom() {
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+}
+
+// Local Storage Functions
 function getFriends(username) {
     const key = `friends_${username}`;
     return JSON.parse(localStorage.getItem(key)) || [];
@@ -584,7 +994,27 @@ function removeFriend(username, friendUsername) {
     localStorage.setItem(key, JSON.stringify(friends));
 }
 
-// Chat history functions
+function getPendingRequests(username) {
+    const key = `pending_requests_${username}`;
+    return JSON.parse(localStorage.getItem(key)) || [];
+}
+
+function savePendingRequest(toUser, fromUser) {
+    const key = `pending_requests_${toUser}`;
+    const requests = getPendingRequests(toUser);
+    if (!requests.includes(fromUser)) {
+        requests.push(fromUser);
+        localStorage.setItem(key, JSON.stringify(requests));
+    }
+}
+
+function removePendingRequest(username, fromUser) {
+    const key = `pending_requests_${username}`;
+    let requests = getPendingRequests(username);
+    requests = requests.filter(req => req !== fromUser);
+    localStorage.setItem(key, JSON.stringify(requests));
+}
+
 function getChatHistory(user1, user2) {
     const key = `chat_${[user1, user2].sort().join('_')}`;
     return JSON.parse(localStorage.getItem(key)) || [];
@@ -603,30 +1033,16 @@ function clearChatHistory(user1, user2) {
 }
 
 function updateUserStatus(username, isOnline) {
-    // Update status indicator in UI
-    const statusIndicators = document.querySelectorAll(`.user-item:contains('${username}') .user-status`);
-    statusIndicators.forEach(indicator => {
-        indicator.style.background = isOnline ? '#00ffcc' : '#ff6b6b';
-    });
-}
-
-// Global functions for notifications
-window.acceptFriendRequest = function(fromUser) {
-    saveFriend(currentUser, fromUser);
-    saveFriend(fromUser, currentUser);
-    loadFriendsList();
-    renderUsersList();
-    
-    // Remove notification
-    const notifications = document.querySelectorAll('div');
-    notifications.forEach(notif => {
-        if (notif.innerHTML.includes('Friend Request')) {
-            notif.remove();
+    const statusIndicators = document.querySelectorAll('.user-item');
+    statusIndicators.forEach(item => {
+        if (item.textContent.includes(username)) {
+            const status = item.querySelector('.user-status');
+            if (status) {
+                status.style.background = isOnline ? '#00ffcc' : '#ff6b6b';
+            }
         }
     });
-    
-    showNotification(`You are now friends with ${fromUser}`, 'success');
-};
+}
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', () => {
@@ -638,10 +1054,8 @@ document.addEventListener('DOMContentLoaded', () => {
         authSection.style.display = 'none';
         chatSection.style.display = 'flex';
         
-        // Socket.io login
         socket.emit('userLogin', currentUser);
         
-        // Load users and friends
         loadAllUsers();
         loadFriendsList();
     }
