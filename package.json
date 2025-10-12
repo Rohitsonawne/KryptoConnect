@@ -1,7 +1,7 @@
 {
   "name": "kryptoconnect",
   "version": "1.0.0",
-  "description": "Secure, encrypted chat application for the crypto community",
+  "description": "Secure, encrypted real-time chat application for the crypto community",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
