@@ -77,7 +77,7 @@ socket.on('userOffline', (username) => {
 socket.on('chatMessage', (data) => {
     console.log('📨 Message received:', data);
     if (data.from === currentChatWith || data.to === currentChatWith) {
-        addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from !== currentUser);
+        addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from === currentUser);
         saveChatMessage(currentUser, currentChatWith, {
             sender: data.from,
             text: data.message,
@@ -155,7 +155,7 @@ socket.on('fileUpload', (fileData) => {
     console.log('📁 File received:', fileData);
     if ((fileData.to === currentUser && fileData.from === currentChatWith) || 
         (fileData.from === currentUser && fileData.to === currentChatWith)) {
-        addFileMessageToChat(fileData, fileData.from !== currentUser);
+        addFileMessageToChat(fileData, fileData.from === currentUser);
         saveChatMessage(currentUser, currentChatWith, {
             sender: fileData.from,
             text: `[FILE] ${fileData.fileName}`,
@@ -522,7 +522,6 @@ function addMessageToChat(sender, text, time, isSender) {
     }
 }
 
-// UPDATED: sendMessage function with input visibility fix
 function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || !currentChatWith) return;
@@ -558,7 +557,7 @@ function sendMessage() {
     isTyping = false;
     socket.emit('typingStop', { from: currentUser, to: currentChatWith });
     
-    // NEW: Ensure input remains visible after sending
+    // Ensure input remains visible after sending
     setTimeout(ensureInputVisible, 100);
 }
 
@@ -577,7 +576,7 @@ function handleTyping() {
     }, 1000);
 }
 
-// NEW: Function to ensure input remains visible
+// Function to ensure input remains visible
 function ensureInputVisible() {
     const inputContainer = document.querySelector('.message-input-container');
     if (inputContainer) {
@@ -752,7 +751,7 @@ function addFileMessageToChat(fileData, isSender) {
     fileElement.className = `file-message ${isSender ? 'sent' : 'received'}`;
     
     fileElement.innerHTML = `
-        ${!isSender ? `<div class="message-sender">${escapeHTML(fileData.from)}</div>` : ''}
+        ${!isSender ? `<div class="message-sender">${escapeHTML(fileData.from)}</div>` : '<div class="message-sender">You</div>'}
         <div class="file-message-header">
             <i class="fas ${setFileIcon(fileData.fileName, fileData.fileType)} file-message-icon"></i>
             <div class="file-message-name">${escapeHTML(fileData.fileName)}</div>
