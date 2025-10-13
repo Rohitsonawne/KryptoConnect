@@ -19,10 +19,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // MongoDB Connection
-// MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kryptoconnect';
 
-// ✅ DEBUG CODE ADD KARO YAHAN
+// ✅ DEBUG CODE
 console.log('🔍 DEBUG: MongoDB Connection Check');
 console.log('MongoDB URI Present:', process.env.MONGODB_URI ? '✅ YES' : '❌ NO');
 console.log('Using URI:', MONGODB_URI);
@@ -52,14 +51,6 @@ mongoose.connection.on('error', (err) => {
 mongoose.connection.on('disconnected', () => {
   console.log('🔴 MongoDB Event: DISCONNECTED');
 });
-
-
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
 
 // MongoDB Schemas
 const userSchema = new mongoose.Schema({
@@ -189,6 +180,7 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({ error: 'Login failed' });
   }
 });
+
 app.get('/api/connection-test', async (req, res) => {
   try {
     const usersCount = await User.countDocuments();
@@ -209,6 +201,7 @@ app.get('/api/connection-test', async (req, res) => {
     });
   }
 });
+
 app.get('/api/users', async (req, res) => {
   try {
     const users = await User.find({}, 'username lastSeen');
