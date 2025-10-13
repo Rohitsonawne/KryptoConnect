@@ -85,7 +85,6 @@ socket.on('chatMessage', (data) => {
             timestamp: data.timestamp
         });
         
-        // Ensure input remains visible after receiving message
         setTimeout(ensureInputVisible, 100);
     }
 });
@@ -153,9 +152,6 @@ socket.on('friendRemoved', (data) => {
 // File upload events
 socket.on('fileUpload', (fileData) => {
     console.log('📁 File received:', fileData);
-     if (fileData.fileData) {
-        fileData.fileUrl = `data:${fileData.fileType};base64,${fileData.fileData}`;
-    }
     if ((fileData.to === currentUser && fileData.from === currentChatWith) || 
         (fileData.from === currentUser && fileData.to === currentChatWith)) {
         addFileMessageToChat(fileData, fileData.from === currentUser);
@@ -168,7 +164,6 @@ socket.on('fileUpload', (fileData) => {
             fileData: fileData
         });
         
-        // Ensure input remains visible after receiving file
         setTimeout(ensureInputVisible, 100);
     }
 });
@@ -466,7 +461,6 @@ function startChatWith(username) {
     
     loadChatHistory(username);
     
-    // Ensure input is visible when starting new chat
     setTimeout(ensureInputVisible, 100);
 }
 
@@ -517,7 +511,6 @@ function addMessageToChat(sender, text, time, isSender) {
     
     messagesContainer.appendChild(messageElement);
     
-    // Scroll to bottom only if user is near bottom
     if (isUserNearBottom()) {
         setTimeout(() => {
             scrollToBottom();
@@ -532,7 +525,6 @@ function sendMessage() {
     const timestamp = Date.now();
     const time = formatTime(timestamp);
     
-    // Send via Socket.IO
     socket.emit('chatMessage', {
         from: currentUser,
         to: currentChatWith,
@@ -540,10 +532,8 @@ function sendMessage() {
         timestamp: timestamp
     });
     
-    // Add message to UI immediately
     addMessageToChat(currentUser, text, time, true);
     
-    // Save to local storage
     saveChatMessage(currentUser, currentChatWith, {
         sender: currentUser,
         text: text,
@@ -551,16 +541,13 @@ function sendMessage() {
         timestamp: timestamp
     });
     
-    // Clear input and focus
     messageInput.value = '';
     messageInput.focus();
     
-    // Stop typing indicator
     clearTimeout(typingTimer);
     isTyping = false;
     socket.emit('typingStop', { from: currentUser, to: currentChatWith });
     
-    // Ensure input remains visible after sending
     setTimeout(ensureInputVisible, 100);
 }
 
@@ -579,7 +566,6 @@ function handleTyping() {
     }, 1000);
 }
 
-// Function to ensure input remains visible
 function ensureInputVisible() {
     const inputContainer = document.querySelector('.message-input-container');
     if (inputContainer) {
@@ -603,7 +589,6 @@ function toggleFileUpload() {
         clearFileSelection();
     }
     
-    // Ensure input remains visible when toggling file upload
     setTimeout(ensureInputVisible, 100);
 }
 
@@ -611,7 +596,6 @@ function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // File size check
     if (file.size > MAX_FILE_SIZE) {
         showNotification('File size exceeds 100MB limit', 'error');
         clearFileSelection();
@@ -622,7 +606,6 @@ function handleFileSelect(event) {
     updateFilePreview(file);
     uploadBtn.disabled = false;
     
-    // Ensure input remains visible after file selection
     setTimeout(ensureInputVisible, 100);
 }
 
@@ -633,7 +616,6 @@ function updateFilePreview(file) {
     filePreviewSize.textContent = `${fileSize} MB`;
     filePreviewIcon.className = `fas ${setFileIcon(file.name, file.type)} file-icon`;
     
-    // Show image preview for image files
     if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -684,29 +666,36 @@ async function uploadFile() {
     uploadBtn.disabled = true;
     uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
-    // Simulate upload progress
     simulateUploadProgress();
 
     try {
-        // For demo purposes, we'll simulate file upload
-        // In real app, you would upload to server and get URL
-        const fileData = {
-            fileName: selectedFile.name,
-            fileSize: selectedFile.size,
-            fileType: selectedFile.type,
-            fileUrl: URL.createObjectURL(selectedFile), // Temporary local URL
-            from: currentUser,
-            to: currentChatWith,
-            timestamp: Date.now()
-        };
+        const formData = new FormData();
+        formData.append('file', selectedFile);
 
-        // Send file data via socket
+        console.log('📤 Uploading file to server...');
+
+        const response = await fetch('/api/upload', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Upload failed');
+        }
+
+        const fileData = await response.json();
+        console.log('✅ File uploaded successfully:', fileData);
+        
+        fileData.from = currentUser;
+        fileData.to = currentChatWith;
+        fileData.timestamp = Date.now();
+
         socket.emit('fileUpload', fileData);
+        console.log('📡 File data sent via socket');
 
-        // Add file message to chat
         addFileMessageToChat(fileData, true);
 
-        // Save to local storage
         saveChatMessage(currentUser, currentChatWith, {
             sender: currentUser,
             text: `[FILE] ${selectedFile.name}`,
@@ -716,17 +705,16 @@ async function uploadFile() {
             fileData: fileData
         });
 
-        showNotification('File uploaded successfully', 'success');
+        showNotification(`File "${selectedFile.name}" uploaded successfully`, 'success');
         clearFileSelection();
 
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('❌ Upload error:', error);
         showNotification('File upload failed: ' + error.message, 'error');
     } finally {
         uploadBtn.disabled = false;
         uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload';
         
-        // Ensure input remains visible after upload
         setTimeout(ensureInputVisible, 100);
     }
 }
@@ -757,16 +745,25 @@ function addFileMessageToChat(fileData, isSender) {
         ${!isSender ? `<div class="message-sender">${escapeHTML(fileData.from)}</div>` : '<div class="message-sender">You</div>'}
         <div class="file-message-header">
             <i class="fas ${setFileIcon(fileData.fileName, fileData.fileType)} file-message-icon"></i>
-            <div class="file-message-name">${escapeHTML(fileData.fileName)}</div>
-            <div class="file-message-size">${fileSize} MB</div>
+            <div class="file-message-info">
+                <div class="file-message-name">${escapeHTML(fileData.fileName)}</div>
+                <div class="file-message-size">${fileSize} MB</div>
+            </div>
         </div>
         <div class="file-message-actions">
             <a href="${fileData.fileUrl}" class="download-btn" download="${fileData.fileName}">
                 <i class="fas fa-download"></i> Download
             </a>
+            ${fileData.fileType.startsWith('image/') ? 
+                `<a href="${fileData.fileUrl}" target="_blank" class="view-btn">
+                    <i class="fas fa-eye"></i> View
+                </a>` : ''
+            }
         </div>
         ${fileData.fileType.startsWith('image/') ? 
-            `<img src="${fileData.fileUrl}" class="file-preview-image" alt="${fileData.fileName}" style="display: block; max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px;">` : ''
+            `<img src="${fileData.fileUrl}" class="file-preview-image" alt="${fileData.fileName}" 
+                 style="display: block; max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; cursor: pointer;" 
+                 onclick="window.open('${fileData.fileUrl}', '_blank')">` : ''
         }
     `;
 
@@ -839,7 +836,6 @@ window.acceptFriendRequest = function(fromUser) {
     loadFriendsList();
     renderUsersList();
     
-    // Remove notification
     const notifications = document.querySelectorAll('.friend-request-notification');
     notifications.forEach(notif => {
         if (notif.innerHTML.includes(fromUser)) {
@@ -858,7 +854,6 @@ window.rejectFriendRequest = function(fromUser) {
     
     removePendingRequest(currentUser, fromUser);
     
-    // Remove notification
     const notifications = document.querySelectorAll('.friend-request-notification');
     notifications.forEach(notif => {
         if (notif.innerHTML.includes(fromUser)) {
@@ -956,11 +951,10 @@ function showFriendRequestNotification(fromUser) {
     }, 10000);
 }
 
-// Scroll helper functions
 function isUserNearBottom() {
     if (!messagesContainer) return true;
     
-    const threshold = 150; // Increased threshold
+    const threshold = 150;
     const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight;
     
     return distanceFromBottom <= threshold;
