@@ -153,6 +153,9 @@ socket.on('friendRemoved', (data) => {
 // File upload events
 socket.on('fileUpload', (fileData) => {
     console.log('📁 File received:', fileData);
+     if (fileData.fileData) {
+        fileData.fileUrl = `data:${fileData.fileType};base64,${fileData.fileData}`;
+    }
     if ((fileData.to === currentUser && fileData.from === currentChatWith) || 
         (fileData.from === currentUser && fileData.to === currentChatWith)) {
         addFileMessageToChat(fileData, fileData.from === currentUser);
