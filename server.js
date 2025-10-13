@@ -466,21 +466,39 @@ io.on('connection', (socket) => {
       }
 
       // Save file message to database
-      const fileMessage = new Message({
+const fileMessage = new Message({
+    from: fileData.from,
+    to: fileData.to,
+    message: `[FILE] ${fileData.fileName}`,
+    timestamp: new Date(fileData.timestamp),
+    isFile: true,
+    fileData: {
+        fileName: fileData.fileName,
+        fileSize: fileData.fileSize,
+        fileType: fileData.fileType,
+        fileData: fileData.fileData, // ✅ Base64 data store karo
         from: fileData.from,
         to: fileData.to,
-        message: `[FILE] ${fileData.fileName}`,
-        timestamp: new Date(fileData.timestamp),
-        isFile: true,
-        fileData: fileData
-      });
+        timestamp: fileData.timestamp
+    }
+});
 
       await fileMessage.save();
 
       // Send to recipient
       const recipientSocket = findSocketByUsername(fileData.to);
       if (recipientSocket) {
-        io.to(recipientSocket).emit('fileUpload', fileData);
+        const enhancedFileData = {
+    fileName: fileData.fileName,
+    fileSize: fileData.fileSize,
+    fileType: fileData.fileType,
+    fileData: fileData.fileData, // ✅ Base64 data
+    from: fileData.from,
+    to: fileData.to,
+    timestamp: fileData.timestamp
+};
+
+io.to(recipientSocket).emit('fileUpload', enhancedFileData);
         console.log(`✅ File delivered to ${fileData.to}`);
       }
 
