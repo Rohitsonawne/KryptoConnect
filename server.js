@@ -1,196 +1,3 @@
-// Modern Auth System
-document.addEventListener('DOMContentLoaded', function() {
-    // Page elements
-    const loginPage = document.getElementById('loginPage');
-    const signupPage = document.getElementById('signupPage');
-    const forgotPasswordPage = document.getElementById('forgotPasswordPage');
-    const chatApp = document.getElementById('chatApp');
-    
-    // Navigation links
-    const showSignup = document.getElementById('showSignup');
-    const showLoginFromSignup = document.getElementById('showLoginFromSignup');
-    const showForgotPassword = document.getElementById('showForgotPassword');
-    const showLoginFromForgot = document.getElementById('showLoginFromForgot');
-    
-    // Forms
-    const loginForm = document.getElementById('loginForm');
-    const signupForm = document.getElementById('signupForm');
-    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
-    
-    // Password toggles
-    const loginPasswordToggle = document.getElementById('loginPasswordToggle');
-    const signupPasswordToggle = document.getElementById('signupPasswordToggle');
-    
-    // Password strength
-    const signupPassword = document.getElementById('signupPassword');
-    const passwordStrengthFill = document.getElementById('passwordStrengthFill');
-    const passwordStrengthText = document.getElementById('passwordStrengthText');
-
-    // Navigation Functions
-    function showPage(page) {
-        // Hide all pages
-        loginPage.style.display = 'none';
-        signupPage.style.display = 'none';
-        forgotPasswordPage.style.display = 'none';
-        chatApp.style.display = 'none';
-        
-        // Show selected page
-        page.style.display = 'block';
-    }
-
-    // Event Listeners for Navigation
-    showSignup.addEventListener('click', (e) => {
-        e.preventDefault();
-        showPage(signupPage);
-    });
-
-    showLoginFromSignup.addEventListener('click', (e) => {
-        e.preventDefault();
-        showPage(loginPage);
-    });
-
-    showForgotPassword.addEventListener('click', (e) => {
-        e.preventDefault();
-        showPage(forgotPasswordPage);
-    });
-
-    showLoginFromForgot.addEventListener('click', (e) => {
-        e.preventDefault();
-        showPage(loginPage);
-    });
-
-    // Password Toggle Functionality
-    function setupPasswordToggle(toggleBtn, passwordInput) {
-        toggleBtn.addEventListener('click', () => {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            toggleBtn.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
-        });
-    }
-
-    setupPasswordToggle(loginPasswordToggle, document.getElementById('loginPassword'));
-    setupPasswordToggle(signupPasswordToggle, document.getElementById('signupPassword'));
-
-    // Password Strength Indicator
-    signupPassword.addEventListener('input', function() {
-        const password = this.value;
-        const strength = calculatePasswordStrength(password);
-        
-        passwordStrengthFill.style.width = strength.percentage + '%';
-        passwordStrengthFill.style.background = strength.color;
-        passwordStrengthText.textContent = strength.text;
-        passwordStrengthText.style.color = strength.color;
-    });
-
-    function calculatePasswordStrength(password) {
-        let score = 0;
-        
-        if (password.length >= 8) score += 25;
-        if (password.length >= 12) score += 15;
-        if (/[A-Z]/.test(password)) score += 20;
-        if (/[a-z]/.test(password)) score += 20;
-        if (/[0-9]/.test(password)) score += 20;
-        if (/[^A-Za-z0-9]/.test(password)) score += 20;
-        
-        if (score >= 80) {
-            return { percentage: 100, color: '#00ffcc', text: 'Strong' };
-        } else if (score >= 60) {
-            return { percentage: 75, color: '#ffcc00', text: 'Good' };
-        } else if (score >= 40) {
-            return { percentage: 50, color: '#ff9900', text: 'Fair' };
-        } else {
-            return { percentage: 25, color: '#ff6b6b', text: 'Weak' };
-        }
-    }
-
-    // Form Submissions with Loading States
-    function setButtonLoading(button, isLoading) {
-        const btnText = button.querySelector('.btn-text');
-        const btnLoader = button.querySelector('.btn-loader');
-        
-        if (isLoading) {
-            btnText.style.opacity = '0';
-            btnLoader.style.display = 'block';
-            button.disabled = true;
-        } else {
-            btnText.style.opacity = '1';
-            btnLoader.style.display = 'none';
-            button.disabled = false;
-        }
-    }
-
-    // Login Form Submission
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const loginBtn = document.getElementById('loginBtn');
-        setButtonLoading(loginBtn, true);
-        
-        // Use your existing login logic here
-        await handleLogin(); // Your existing handleLogin function
-        
-        setButtonLoading(loginBtn, false);
-    });
-
-    // Signup Form Submission
-    signupForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const signupBtn = document.getElementById('signupBtn');
-        setButtonLoading(signupBtn, true);
-        
-        // Add your signup logic here
-        await handleSignup(); // You'll need to create this function
-        
-        setButtonLoading(signupBtn, false);
-    });
-
-    // Forgot Password Form Submission
-    forgotPasswordForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const resetBtn = document.getElementById('resetPasswordBtn');
-        setButtonLoading(resetBtn, true);
-        
-        // Simulate API call
-        setTimeout(() => {
-            document.getElementById('forgotSuccess').style.display = 'flex';
-            document.getElementById('forgotError').textContent = '';
-            setButtonLoading(resetBtn, false);
-        }, 2000);
-    });
-
-    // Social Login Handlers (placeholder)
-    document.querySelectorAll('.social-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            // Add social login integration here
-            console.log('Social login clicked:', btn.textContent.trim());
-        });
-    });
-
-    // Initialize - Show login page by default
-    showPage(loginPage);
-});
-
-// Your existing handleLogin function will work with the new UI
-// You'll need to modify it to show the chat app on successful login
-async function handleLogin() {
-    // Your existing login logic, but add:
-    // On successful login:
-    // document.getElementById('chatApp').style.display = 'block';
-    // document.getElementById('loginPage').style.display = 'none';
-}
-
-// Add this function for signup
-async function handleSignup() {
-    const username = document.getElementById('signupUsername').value;
-    const email = document.getElementById('signupEmail').value;
-    const password = document.getElementById('signupPassword').value;
-    const confirmPassword = document.getElementById('signupConfirmPassword').value;
-    
-    // Add your signup logic here
-    console.log('Signup attempt:', { username, email, password, confirmPassword });
-}
-
-
-
 const express = require('express');
 const path = require('path');
 const http = require('http');
@@ -307,12 +114,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             fileName: req.file.originalname,
             fileSize: req.file.size,
             fileType: req.file.mimetype,
-            filePath: `/uploads/${req.file.filename}`,
-            fileUrl: `/api/download/${req.file.filename}`,
+            filePath: /uploads/${req.file.filename},
+            fileUrl: /api/download/${req.file.filename},
             timestamp: Date.now()
         };
 
-        console.log(`✅ File uploaded: ${fileData.fileName}`);
+        console.log(✅ File uploaded: ${fileData.fileName});
         res.json(fileData);
 
     } catch (error) {
@@ -327,7 +134,7 @@ app.get('/api/download/:filename', (req, res) => {
         const filename = req.params.filename;
         const filePath = path.join(__dirname, 'uploads', filename);
         
-        console.log(`📥 Download request for: ${filename}`);
+        console.log(📥 Download request for: ${filename});
         
         // Check if file exists
         if (!fs.existsSync(filePath)) {
@@ -339,14 +146,14 @@ app.get('/api/download/:filename', (req, res) => {
         const originalName = req.query.original || filename;
 
         // Set headers for download
-        res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
+        res.setHeader('Content-Disposition', attachment; filename="${originalName}");
         res.setHeader('Content-Type', 'application/octet-stream');
 
         // Stream file to response
         const fileStream = fs.createReadStream(filePath);
         fileStream.pipe(res);
 
-        console.log(`✅ File download started: ${filename}`);
+        console.log(✅ File download started: ${filename});
 
     } catch (error) {
         console.error('Download error:', error);
@@ -388,7 +195,7 @@ app.post('/api/register', async (req, res) => {
 
         await newUser.save();
         
-        console.log(`👤 New user registered: ${username}`);
+        console.log(👤 New user registered: ${username});
         res.json({ 
             message: 'Registration successful', 
             user: { username: newUser.username } 
@@ -421,7 +228,7 @@ app.post('/api/login', async (req, res) => {
         user.lastSeen = new Date();
         await user.save();
 
-        console.log(`🔐 User logged in: ${username}`);
+        console.log(🔐 User logged in: ${username});
         res.json({ 
             message: 'Login successful', 
             user: { username: user.username } 
@@ -517,7 +324,7 @@ io.on('connection', (socket) => {
             await user.save();
             
             socket.broadcast.emit('userOnline', username);
-            console.log(`🟢 ${username} is online (${Object.keys(onlineUsers).length} users online)`);
+            console.log(🟢 ${username} is online (${Object.keys(onlineUsers).length} users online));
 
             // Send pending friend requests
             const pendingRequests = await FriendRequest.find({ 
@@ -564,10 +371,10 @@ io.on('connection', (socket) => {
             const recipientSocket = findSocketByUsername(to);
             if (recipientSocket) {
                 io.to(recipientSocket).emit('chatMessage', data);
-                console.log(`💬 Message delivered from ${from} to ${to}`);
+                console.log(💬 Message delivered from ${from} to ${to});
             }
 
-            console.log(`💬 Message from ${from} to ${to}`);
+            console.log(💬 Message from ${from} to ${to});
 
         } catch (error) {
             console.error('Chat message error:', error);
@@ -592,7 +399,7 @@ io.on('connection', (socket) => {
     socket.on('friendRequest', async (data) => {
         try {
             const { from, to } = data;
-            console.log(`📩 Friend request from ${from} to ${to}`);
+            console.log(📩 Friend request from ${from} to ${to});
 
             // Check if users exist
             const fromUser = await User.findOne({ username: from });
@@ -662,7 +469,7 @@ io.on('connection', (socket) => {
 
     socket.on('fileUpload', async (fileData) => {
         try {
-            console.log(`📁 File upload from ${fileData.from} to ${fileData.to}`);
+            console.log(📁 File upload from ${fileData.from} to ${fileData.to});
             
             if (!fileData.fileName || !fileData.from || !fileData.to) {
                 socket.emit('fileUploadError', { error: 'Invalid file data' });
@@ -673,7 +480,7 @@ io.on('connection', (socket) => {
             const fileMessage = new Message({
                 from: fileData.from,
                 to: fileData.to,
-                message: `[FILE] ${fileData.fileName}`,
+                message: [FILE] ${fileData.fileName},
                 timestamp: new Date(fileData.timestamp),
                 isFile: true,
                 fileData: {
@@ -694,7 +501,7 @@ io.on('connection', (socket) => {
             const recipientSocket = findSocketByUsername(fileData.to);
             if (recipientSocket) {
                 io.to(recipientSocket).emit('fileUpload', fileData);
-                console.log(`✅ File delivered to ${fileData.to}`);
+                console.log(✅ File delivered to ${fileData.to});
             }
 
         } catch (error) {
@@ -706,7 +513,7 @@ io.on('connection', (socket) => {
     socket.on('acceptFriendRequest', async (data) => {
         try {
             const { from, to } = data;
-            console.log(`✅ ${to} accepted friend request from ${from}`);
+            console.log(✅ ${to} accepted friend request from ${from});
 
             // Update friend request status
             await FriendRequest.updateOne(
@@ -748,7 +555,7 @@ io.on('connection', (socket) => {
     socket.on('rejectFriendRequest', async (data) => {
         try {
             const { from, to } = data;
-            console.log(`❌ ${to} rejected friend request from ${from}`);
+            console.log(❌ ${to} rejected friend request from ${from});
 
             // Update friend request status
             await FriendRequest.updateOne(
@@ -773,7 +580,7 @@ io.on('connection', (socket) => {
     socket.on('removeFriend', async (data) => {
         try {
             const { from, friend } = data;
-            console.log(`🗑️ ${from} removed friend ${friend}`);
+            console.log(🗑️ ${from} removed friend ${friend});
 
             // Remove friendship
             await Friend.deleteOne({
@@ -802,7 +609,7 @@ io.on('connection', (socket) => {
         if (username) {
             socket.broadcast.emit('userOffline', username);
             delete onlineUsers[socket.id];
-            console.log(`🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online`);
+            console.log(🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online);
         }
     });
 });
@@ -819,7 +626,7 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
     console.log('🚀 KryptoConnect Server Started with MongoDB!');
-    console.log(`📍 Server running on port ${PORT}`);
+    console.log(📍 Server running on port ${PORT});
     console.log('💾 Database: MongoDB');
     console.log('💬 Real-time Chat: ACTIVE');
     console.log('📁 File Sharing: ACTIVE (100MB)');
