@@ -4,254 +4,178 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>KryptoConnect - Secure Crypto Chat</title>
-    
-    <!-- Font Awesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
     <link rel="stylesheet" href="style.css">
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-    <!-- Background Animation -->
-    <div class="background-animation">
-        <div class="floating-shapes">
-            <div class="shape shape-1"></div>
-            <div class="shape shape-2"></div>
-            <div class="shape shape-3"></div>
-            <div class="shape shape-4"></div>
+    <!-- Background -->
+    <div class="background">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <!-- Login Page -->
+    <div class="auth-container" id="loginPage">
+        <div class="auth-card">
+            <div class="logo">
+                <i class="fas fa-comments"></i>
+                <h1>KryptoConnect</h1>
+                <p>Connect securely with the crypto community</p>
+            </div>
+
+            <form class="auth-form" id="loginForm">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="loginUsername" placeholder="Username" required>
+                </div>
+
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                    <button type="button" class="toggle-password">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox">
+                        <input type="checkbox" id="rememberMe">
+                        <span class="checkmark"></span>
+                        Remember me
+                    </label>
+                    <a href="#" class="forgot-link" id="showForgot">Forgot Password?</a>
+                </div>
+
+                <button type="submit" class="btn-primary" id="loginBtn">
+                    <span>Login</span>
+                </button>
+
+                <div class="divider">
+                    <span>or</span>
+                </div>
+
+                <div class="social-login">
+                    <button type="button" class="btn-google">
+                        <i class="fab fa-google"></i>
+                        Continue with Google
+                    </button>
+                    <button type="button" class="btn-facebook">
+                        <i class="fab fa-facebook-f"></i>
+                        Continue with Facebook
+                    </button>
+                </div>
+
+                <div class="auth-switch">
+                    Don't have an account? <a href="#" id="showSignup">Sign up</a>
+                </div>
+            </form>
+
+            <div class="error-message" id="loginError"></div>
         </div>
     </div>
 
-    <!-- Main Container -->
-    <div class="main-container">
-        <!-- Login Page -->
-        <div class="auth-page" id="loginPage">
-            <div class="auth-container">
-                <div class="auth-card">
-                    <!-- Logo Header -->
-                    <div class="logo-header">
-                        <div class="logo-icon">
-                            <i class="fas fa-comments"></i>
-                        </div>
-                        <h1 class="logo-text">KryptoConnect</h1>
-                        <p class="tagline">Connect securely with the crypto community</p>
-                    </div>
+    <!-- Signup Page -->
+    <div class="auth-container" id="signupPage" style="display: none;">
+        <div class="auth-card">
+            <div class="logo">
+                <i class="fas fa-user-plus"></i>
+                <h1>Join KryptoConnect</h1>
+                <p>Create your secure account</p>
+            </div>
 
-                    <!-- Login Form -->
-                    <form class="auth-form" id="loginForm">
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="text" id="loginUsername" class="form-input" required>
-                                <label for="loginUsername" class="form-label">Username</label>
-                                <i class="fas fa-user input-icon"></i>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="password" id="loginPassword" class="form-input" required>
-                                <label for="loginPassword" class="form-label">Password</label>
-                                <i class="fas fa-lock input-icon"></i>
-                                <button type="button" class="password-toggle" id="loginPasswordToggle">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="form-options">
-                            <label class="checkbox-container">
-                                <input type="checkbox" id="rememberMe">
-                                <span class="checkmark"></span>
-                                Remember me
-                            </label>
-                            <a href="#" class="forgot-link" id="showForgotPassword">Forgot Password?</a>
-                        </div>
-
-                        <button type="submit" class="auth-btn primary-btn" id="loginBtn">
-                            <span class="btn-text">Login</span>
-                            <div class="btn-loader" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </button>
-
-                        <div class="divider">
-                            <span>or</span>
-                        </div>
-
-                        <div class="social-login">
-                            <button type="button" class="social-btn google-btn">
-                                <i class="fab fa-google"></i>
-                                Continue with Google
-                            </button>
-                            <button type="button" class="social-btn facebook-btn">
-                                <i class="fab fa-facebook-f"></i>
-                                Continue with Facebook
-                            </button>
-                        </div>
-
-                        <div class="auth-switch">
-                            Don't have an account? <a href="#" class="switch-link" id="showSignup">Sign up</a>
-                        </div>
-                    </form>
-
-                    <div class="error-message" id="loginError"></div>
+            <form class="auth-form" id="signupForm">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="signupUsername" placeholder="Username" required>
                 </div>
-            </div>
-        </div>
 
-        <!-- Signup Page -->
-        <div class="auth-page" id="signupPage" style="display: none;">
-            <div class="auth-container">
-                <div class="auth-card">
-                    <!-- Logo Header -->
-                    <div class="logo-header">
-                        <div class="logo-icon">
-                            <i class="fas fa-comments"></i>
-                        </div>
-                        <h1 class="logo-text">KryptoConnect</h1>
-                        <p class="tagline">Join the secure crypto community</p>
-                    </div>
-
-                    <!-- Signup Form -->
-                    <form class="auth-form" id="signupForm">
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="text" id="signupUsername" class="form-input" required>
-                                <label for="signupUsername" class="form-label">Username</label>
-                                <i class="fas fa-user input-icon"></i>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="email" id="signupEmail" class="form-input" required>
-                                <label for="signupEmail" class="form-label">Email</label>
-                                <i class="fas fa-envelope input-icon"></i>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="password" id="signupPassword" class="form-input" required>
-                                <label for="signupPassword" class="form-label">Password</label>
-                                <i class="fas fa-lock input-icon"></i>
-                                <button type="button" class="password-toggle" id="signupPasswordToggle">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                            <div class="password-strength">
-                                <div class="strength-bar">
-                                    <div class="strength-fill" id="passwordStrengthFill"></div>
-                                </div>
-                                <span class="strength-text" id="passwordStrengthText">Weak</span>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="password" id="signupConfirmPassword" class="form-input" required>
-                                <label for="signupConfirmPassword" class="form-label">Confirm Password</label>
-                                <i class="fas fa-lock input-icon"></i>
-                            </div>
-                        </div>
-
-                        <div class="form-options">
-                            <label class="checkbox-container">
-                                <input type="checkbox" id="acceptTerms" required>
-                                <span class="checkmark"></span>
-                                I agree to the <a href="#" class="terms-link">Terms of Service</a> and <a href="#" class="terms-link">Privacy Policy</a>
-                            </label>
-                        </div>
-
-                        <button type="submit" class="auth-btn primary-btn" id="signupBtn">
-                            <span class="btn-text">Create Account</span>
-                            <div class="btn-loader" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </button>
-
-                        <div class="divider">
-                            <span>or</span>
-                        </div>
-
-                        <div class="social-login">
-                            <button type="button" class="social-btn google-btn">
-                                <i class="fab fa-google"></i>
-                                Continue with Google
-                            </button>
-                            <button type="button" class="social-btn facebook-btn">
-                                <i class="fab fa-facebook-f"></i>
-                                Continue with Facebook
-                            </button>
-                        </div>
-
-                        <div class="auth-switch">
-                            Already have an account? <a href="#" class="switch-link" id="showLoginFromSignup">Login</a>
-                        </div>
-                    </form>
-
-                    <div class="error-message" id="signupError"></div>
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="signupEmail" placeholder="Email" required>
                 </div>
-            </div>
-        </div>
 
-        <!-- Forgot Password Page -->
-        <div class="auth-page" id="forgotPasswordPage" style="display: none;">
-            <div class="auth-container">
-                <div class="auth-card">
-                    <!-- Logo Header -->
-                    <div class="logo-header">
-                        <div class="logo-icon">
-                            <i class="fas fa-key"></i>
-                        </div>
-                        <h1 class="logo-text">Reset Password</h1>
-                        <p class="tagline">Enter your email to reset your password</p>
-                    </div>
-
-                    <!-- Forgot Password Form -->
-                    <form class="auth-form" id="forgotPasswordForm">
-                        <div class="form-group">
-                            <div class="input-container">
-                                <input type="email" id="forgotEmail" class="form-input" required>
-                                <label for="forgotEmail" class="form-label">Email Address</label>
-                                <i class="fas fa-envelope input-icon"></i>
-                            </div>
-                        </div>
-
-                        <button type="submit" class="auth-btn primary-btn" id="resetPasswordBtn">
-                            <span class="btn-text">Send Reset Link</span>
-                            <div class="btn-loader" style="display: none;">
-                                <i class="fas fa-spinner fa-spin"></i>
-                            </div>
-                        </button>
-
-                        <div class="auth-switch">
-                            Remember your password? <a href="#" class="switch-link" id="showLoginFromForgot">Back to Login</a>
-                        </div>
-                    </form>
-
-                    <div class="success-message" id="forgotSuccess" style="display: none;">
-                        <i class="fas fa-check-circle"></i>
-                        Password reset link has been sent to your email!
-                    </div>
-
-                    <div class="error-message" id="forgotError"></div>
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="signupPassword" placeholder="Password" required>
+                    <button type="button" class="toggle-password">
+                        <i class="fas fa-eye"></i>
+                    </button>
                 </div>
-            </div>
-        </div>
 
-        <!-- Main Chat App (Hidden initially) -->
-        <div class="chat-app" id="chatApp" style="display: none;">
-            <!-- Your existing chat app content here -->
-            <div class="app-container">
-                <!-- ... your existing chat section code ... -->
-            </div>
+                <div class="password-strength">
+                    <div class="strength-bar">
+                        <div class="strength-fill" id="passwordStrength"></div>
+                    </div>
+                    <span id="strength-text">Weak</span>
+                </div>
+
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox">
+                        <input type="checkbox" id="acceptTerms" required>
+                        <span class="checkmark"></span>
+                        I agree to Terms & Privacy
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-primary" id="signupBtn">
+                    <span>Create Account</span>
+                </button>
+
+                <div class="auth-switch">
+                    Already have an account? <a href="#" id="showLogin">Login</a>
+                </div>
+            </form>
+
+            <div class="error-message" id="signupError"></div>
         </div>
     </div>
 
-    <script src="client.js"></script>
+    <!-- Forgot Password Page -->
+    <div class="auth-container" id="forgotPage" style="display: none;">
+        <div class="auth-card">
+            <div class="logo">
+                <i class="fas fa-key"></i>
+                <h1>Reset Password</h1>
+                <p>Enter your email to reset password</p>
+            </div>
+
+            <form class="auth-form" id="forgotForm">
+                <div class="input-group">
+                    <i class="fas fa-envelope"></i>
+                    <input type="email" id="forgotEmail" placeholder="Email Address" required>
+                </div>
+
+                <button type="submit" class="btn-primary" id="resetBtn">
+                    <span>Send Reset Link</span>
+                </button>
+
+                <div class="auth-switch">
+                    Remember password? <a href="#" id="backToLogin">Back to Login</a>
+                </div>
+            </form>
+
+            <div class="success-message" id="forgotSuccess" style="display: none;">
+                <i class="fas fa-check-circle"></i>
+                Reset link sent to your email!
+            </div>
+
+            <div class="error-message" id="forgotError"></div>
+        </div>
+    </div>
+
+    <!-- Chat App -->
+    <div id="chatApp" style="display: none;">
+        <!-- Your existing chat app content -->
+    </div>
+
+    <script src="script.js"></script>
 </body>
 </html>
