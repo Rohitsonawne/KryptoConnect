@@ -1,3 +1,196 @@
+// Modern Auth System
+document.addEventListener('DOMContentLoaded', function() {
+    // Page elements
+    const loginPage = document.getElementById('loginPage');
+    const signupPage = document.getElementById('signupPage');
+    const forgotPasswordPage = document.getElementById('forgotPasswordPage');
+    const chatApp = document.getElementById('chatApp');
+    
+    // Navigation links
+    const showSignup = document.getElementById('showSignup');
+    const showLoginFromSignup = document.getElementById('showLoginFromSignup');
+    const showForgotPassword = document.getElementById('showForgotPassword');
+    const showLoginFromForgot = document.getElementById('showLoginFromForgot');
+    
+    // Forms
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    const forgotPasswordForm = document.getElementById('forgotPasswordForm');
+    
+    // Password toggles
+    const loginPasswordToggle = document.getElementById('loginPasswordToggle');
+    const signupPasswordToggle = document.getElementById('signupPasswordToggle');
+    
+    // Password strength
+    const signupPassword = document.getElementById('signupPassword');
+    const passwordStrengthFill = document.getElementById('passwordStrengthFill');
+    const passwordStrengthText = document.getElementById('passwordStrengthText');
+
+    // Navigation Functions
+    function showPage(page) {
+        // Hide all pages
+        loginPage.style.display = 'none';
+        signupPage.style.display = 'none';
+        forgotPasswordPage.style.display = 'none';
+        chatApp.style.display = 'none';
+        
+        // Show selected page
+        page.style.display = 'block';
+    }
+
+    // Event Listeners for Navigation
+    showSignup.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage(signupPage);
+    });
+
+    showLoginFromSignup.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage(loginPage);
+    });
+
+    showForgotPassword.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage(forgotPasswordPage);
+    });
+
+    showLoginFromForgot.addEventListener('click', (e) => {
+        e.preventDefault();
+        showPage(loginPage);
+    });
+
+    // Password Toggle Functionality
+    function setupPasswordToggle(toggleBtn, passwordInput) {
+        toggleBtn.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            toggleBtn.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+        });
+    }
+
+    setupPasswordToggle(loginPasswordToggle, document.getElementById('loginPassword'));
+    setupPasswordToggle(signupPasswordToggle, document.getElementById('signupPassword'));
+
+    // Password Strength Indicator
+    signupPassword.addEventListener('input', function() {
+        const password = this.value;
+        const strength = calculatePasswordStrength(password);
+        
+        passwordStrengthFill.style.width = strength.percentage + '%';
+        passwordStrengthFill.style.background = strength.color;
+        passwordStrengthText.textContent = strength.text;
+        passwordStrengthText.style.color = strength.color;
+    });
+
+    function calculatePasswordStrength(password) {
+        let score = 0;
+        
+        if (password.length >= 8) score += 25;
+        if (password.length >= 12) score += 15;
+        if (/[A-Z]/.test(password)) score += 20;
+        if (/[a-z]/.test(password)) score += 20;
+        if (/[0-9]/.test(password)) score += 20;
+        if (/[^A-Za-z0-9]/.test(password)) score += 20;
+        
+        if (score >= 80) {
+            return { percentage: 100, color: '#00ffcc', text: 'Strong' };
+        } else if (score >= 60) {
+            return { percentage: 75, color: '#ffcc00', text: 'Good' };
+        } else if (score >= 40) {
+            return { percentage: 50, color: '#ff9900', text: 'Fair' };
+        } else {
+            return { percentage: 25, color: '#ff6b6b', text: 'Weak' };
+        }
+    }
+
+    // Form Submissions with Loading States
+    function setButtonLoading(button, isLoading) {
+        const btnText = button.querySelector('.btn-text');
+        const btnLoader = button.querySelector('.btn-loader');
+        
+        if (isLoading) {
+            btnText.style.opacity = '0';
+            btnLoader.style.display = 'block';
+            button.disabled = true;
+        } else {
+            btnText.style.opacity = '1';
+            btnLoader.style.display = 'none';
+            button.disabled = false;
+        }
+    }
+
+    // Login Form Submission
+    loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const loginBtn = document.getElementById('loginBtn');
+        setButtonLoading(loginBtn, true);
+        
+        // Use your existing login logic here
+        await handleLogin(); // Your existing handleLogin function
+        
+        setButtonLoading(loginBtn, false);
+    });
+
+    // Signup Form Submission
+    signupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const signupBtn = document.getElementById('signupBtn');
+        setButtonLoading(signupBtn, true);
+        
+        // Add your signup logic here
+        await handleSignup(); // You'll need to create this function
+        
+        setButtonLoading(signupBtn, false);
+    });
+
+    // Forgot Password Form Submission
+    forgotPasswordForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const resetBtn = document.getElementById('resetPasswordBtn');
+        setButtonLoading(resetBtn, true);
+        
+        // Simulate API call
+        setTimeout(() => {
+            document.getElementById('forgotSuccess').style.display = 'flex';
+            document.getElementById('forgotError').textContent = '';
+            setButtonLoading(resetBtn, false);
+        }, 2000);
+    });
+
+    // Social Login Handlers (placeholder)
+    document.querySelectorAll('.social-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            // Add social login integration here
+            console.log('Social login clicked:', btn.textContent.trim());
+        });
+    });
+
+    // Initialize - Show login page by default
+    showPage(loginPage);
+});
+
+// Your existing handleLogin function will work with the new UI
+// You'll need to modify it to show the chat app on successful login
+async function handleLogin() {
+    // Your existing login logic, but add:
+    // On successful login:
+    // document.getElementById('chatApp').style.display = 'block';
+    // document.getElementById('loginPage').style.display = 'none';
+}
+
+// Add this function for signup
+async function handleSignup() {
+    const username = document.getElementById('signupUsername').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+    const confirmPassword = document.getElementById('signupConfirmPassword').value;
+    
+    // Add your signup logic here
+    console.log('Signup attempt:', { username, email, password, confirmPassword });
+}
+
+
+
 const express = require('express');
 const path = require('path');
 const http = require('http');
