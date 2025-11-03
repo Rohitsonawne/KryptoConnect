@@ -66,12 +66,12 @@ socket.on('disconnect', () => {
 
 socket.on('userOnline', (username) => {
     updateUserStatus(username, true);
-    showNotification(${username} is now online, 'online');
+    showNotification(`${username} is now online`, 'online');
 });
 
 socket.on('userOffline', (username) => {
     updateUserStatus(username, false);
-    showNotification(${username} is now offline, 'offline');
+    showNotification(`${username} is now offline`, 'offline');
 });
 
 socket.on('chatMessage', (data) => {
@@ -91,7 +91,7 @@ socket.on('chatMessage', (data) => {
 
 socket.on('typingStart', (data) => {
     if (data.from === currentChatWith) {
-        typingIndicator.textContent = ${data.from} is typing...;
+        typingIndicator.textContent = `${data.from} is typing...`;
     }
 });
 
@@ -119,7 +119,7 @@ socket.on('friendRequestForUser', (data) => {
 
 socket.on('friendRequestSent', (data) => {
     console.log('✅ Friend request sent to:', data.to);
-    showNotification(Friend request sent to ${data.to}, 'success');
+    showNotification(`Friend request sent to ${data.to}`, 'success');
     renderUsersList();
 });
 
@@ -133,18 +133,18 @@ socket.on('friendRequestAccepted', (data) => {
     if (data.to === currentUser) {
         loadFriendsList();
         renderUsersList();
-        showNotification(${data.from} accepted your friend request!, 'success');
+        showNotification(`${data.from} accepted your friend request!`, 'success');
     }
 });
 
 socket.on('friendRequestRejected', (data) => {
     console.log('❌ Friend request rejected by:', data.from);
-    showNotification(${data.from} rejected your friend request, 'info');
+    showNotification(`${data.from} rejected your friend request`, 'info');
 });
 
 socket.on('friendRemoved', (data) => {
     console.log('🗑️ Friend removed you:', data.from);
-    showNotification(${data.from} removed you from friends, 'info');
+    showNotification(`${data.from} removed you from friends`, 'info');
     loadFriendsList();
     renderUsersList();
 });
@@ -157,7 +157,7 @@ socket.on('fileUpload', (fileData) => {
         addFileMessageToChat(fileData, fileData.from === currentUser);
         saveChatMessage(currentUser, currentChatWith, {
             sender: fileData.from,
-            text: [FILE] ${fileData.fileName},
+            text: `[FILE] ${fileData.fileName}`,
             time: formatTime(fileData.timestamp),
             timestamp: fileData.timestamp,
             isFile: true,
@@ -451,7 +451,7 @@ function startChatWith(username) {
     noChatSelected.style.display = 'none';
     messageInput.disabled = false;
     sendBtn.disabled = false;
-    messageInput.placeholder = Message ${username}...;
+    messageInput.placeholder = `Message ${username}...`;
     messageInput.focus();
     
     // Hide file upload section when switching chats
@@ -501,10 +501,10 @@ function addMessageToChat(sender, text, time, isSender) {
     }
     
     const messageElement = document.createElement('div');
-    messageElement.className = message ${isSender ? 'sent' : 'received'};
+    messageElement.className = `message ${isSender ? 'sent' : 'received'}`;
     
     messageElement.innerHTML = `
-        ${!isSender ? <div class="message-sender">${escapeHTML(sender)}</div> : '<div class="message-sender">You</div>'}
+        ${!isSender ? `<div class="message-sender">${escapeHTML(sender)}</div>` : '<div class="message-sender">You</div>'}
         <div class="message-text">${escapeHTML(text)}</div>
         <div class="message-time">${time}</div>
     `;
@@ -613,8 +613,8 @@ function updateFilePreview(file) {
     const fileSize = (file.size / (1024 * 1024)).toFixed(2);
     
     filePreviewName.textContent = file.name;
-    filePreviewSize.textContent = ${fileSize} MB;
-    filePreviewIcon.className = fas ${setFileIcon(file.name, file.type)} file-icon;
+    filePreviewSize.textContent = `${fileSize} MB`;
+    filePreviewIcon.className = `fas ${setFileIcon(file.name, file.type)} file-icon`;
     
     if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -698,14 +698,14 @@ async function uploadFile() {
 
         saveChatMessage(currentUser, currentChatWith, {
             sender: currentUser,
-            text: [FILE] ${selectedFile.name},
+            text: `[FILE] ${selectedFile.name}`,
             time: formatTime(fileData.timestamp),
             timestamp: fileData.timestamp,
             isFile: true,
             fileData: fileData
         });
 
-        showNotification(File "${selectedFile.name}" uploaded successfully, 'success');
+        showNotification(`File "${selectedFile.name}" uploaded successfully`, 'success');
         clearFileSelection();
 
     } catch (error) {
@@ -739,10 +739,10 @@ function addFileMessageToChat(fileData, isSender) {
 
     const fileSize = (fileData.fileSize / (1024 * 1024)).toFixed(2);
     const fileElement = document.createElement('div');
-    fileElement.className = file-message ${isSender ? 'sent' : 'received'};
+    fileElement.className = `file-message ${isSender ? 'sent' : 'received'}`;
     
     fileElement.innerHTML = `
-        ${!isSender ? <div class="message-sender">${escapeHTML(fileData.from)}</div> : '<div class="message-sender">You</div>'}
+        ${!isSender ? `<div class="message-sender">${escapeHTML(fileData.from)}</div>` : '<div class="message-sender">You</div>'}
         <div class="file-message-header">
             <i class="fas ${setFileIcon(fileData.fileName, fileData.fileType)} file-message-icon"></i>
             <div class="file-message-info">
@@ -843,7 +843,7 @@ window.acceptFriendRequest = function(fromUser) {
         }
     });
     
-    showNotification(You are now friends with ${fromUser}, 'success');
+    showNotification(`You are now friends with ${fromUser}`, 'success');
 };
 
 window.rejectFriendRequest = function(fromUser) {
@@ -861,7 +861,7 @@ window.rejectFriendRequest = function(fromUser) {
         }
     });
     
-    showNotification(Friend request from ${fromUser} rejected, 'info');
+    showNotification(`Friend request from ${fromUser} rejected`, 'info');
 };
 
 function clearChat() {
@@ -968,12 +968,12 @@ function scrollToBottom() {
 
 // Local Storage Functions
 function getFriends(username) {
-    const key = friends_${username};
+    const key = `friends_${username}`;
     return JSON.parse(localStorage.getItem(key)) || [];
 }
 
 function saveFriend(username, friendUsername) {
-    const key = friends_${username};
+    const key = `friends_${username}`;
     const friends = getFriends(username);
     if (!friends.includes(friendUsername)) {
         friends.push(friendUsername);
@@ -984,19 +984,19 @@ function saveFriend(username, friendUsername) {
 }
 
 function removeFriend(username, friendUsername) {
-    const key = friends_${username};
+    const key = `friends_${username}`;
     let friends = getFriends(username);
     friends = friends.filter(f => f !== friendUsername);
     localStorage.setItem(key, JSON.stringify(friends));
 }
 
 function getPendingRequests(username) {
-    const key = pending_requests_${username};
+    const key = `pending_requests_${username}`;
     return JSON.parse(localStorage.getItem(key)) || [];
 }
 
 function savePendingRequest(toUser, fromUser) {
-    const key = pending_requests_${toUser};
+    const key = `pending_requests_${toUser}`;
     const requests = getPendingRequests(toUser);
     if (!requests.includes(fromUser)) {
         requests.push(fromUser);
@@ -1005,26 +1005,26 @@ function savePendingRequest(toUser, fromUser) {
 }
 
 function removePendingRequest(username, fromUser) {
-    const key = pending_requests_${username};
+    const key = `pending_requests_${username}`;
     let requests = getPendingRequests(username);
     requests = requests.filter(req => req !== fromUser);
     localStorage.setItem(key, JSON.stringify(requests));
 }
 
 function getChatHistory(user1, user2) {
-    const key = chat_${[user1, user2].sort().join('_')};
+    const key = `chat_${[user1, user2].sort().join('_')}`;
     return JSON.parse(localStorage.getItem(key)) || [];
 }
 
 function saveChatMessage(user1, user2, message) {
-    const key = chat_${[user1, user2].sort().join('_')};
+    const key = `chat_${[user1, user2].sort().join('_')}`;
     const history = getChatHistory(user1, user2);
     history.push(message);
     localStorage.setItem(key, JSON.stringify(history));
 }
 
 function clearChatHistory(user1, user2) {
-    const key = chat_${[user1, user2].sort().join('_')};
+    const key = `chat_${[user1, user2].sort().join('_')}`;
     localStorage.setItem(key, JSON.stringify([]));
 }
 
