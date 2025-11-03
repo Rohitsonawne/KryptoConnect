@@ -114,12 +114,12 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
             fileName: req.file.originalname,
             fileSize: req.file.size,
             fileType: req.file.mimetype,
-            filePath: /uploads/${req.file.filename},
-            fileUrl: /api/download/${req.file.filename},
+            filePath: `/uploads/${req.file.filename}`,
+            fileUrl: `/api/download/${req.file.filename}`,
             timestamp: Date.now()
         };
 
-        console.log(✅ File uploaded: ${fileData.fileName});
+        console.log(`✅ File uploaded: ${fileData.fileName}`);
         res.json(fileData);
 
     } catch (error) {
@@ -134,7 +134,7 @@ app.get('/api/download/:filename', (req, res) => {
         const filename = req.params.filename;
         const filePath = path.join(__dirname, 'uploads', filename);
         
-        console.log(📥 Download request for: ${filename});
+        console.log(`📥 Download request for: ${filename}`);
         
         // Check if file exists
         if (!fs.existsSync(filePath)) {
@@ -146,14 +146,14 @@ app.get('/api/download/:filename', (req, res) => {
         const originalName = req.query.original || filename;
 
         // Set headers for download
-        res.setHeader('Content-Disposition', attachment; filename="${originalName}");
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
         res.setHeader('Content-Type', 'application/octet-stream');
 
         // Stream file to response
         const fileStream = fs.createReadStream(filePath);
         fileStream.pipe(res);
 
-        console.log(✅ File download started: ${filename});
+        console.log(`✅ File download started: ${filename}`);
 
     } catch (error) {
         console.error('Download error:', error);
@@ -195,7 +195,7 @@ app.post('/api/register', async (req, res) => {
 
         await newUser.save();
         
-        console.log(👤 New user registered: ${username});
+        console.log(`👤 New user registered: ${username}`);
         res.json({ 
             message: 'Registration successful', 
             user: { username: newUser.username } 
@@ -228,7 +228,7 @@ app.post('/api/login', async (req, res) => {
         user.lastSeen = new Date();
         await user.save();
 
-        console.log(🔐 User logged in: ${username});
+        console.log(`🔐 User logged in: ${username}`);
         res.json({ 
             message: 'Login successful', 
             user: { username: user.username } 
@@ -324,7 +324,7 @@ io.on('connection', (socket) => {
             await user.save();
             
             socket.broadcast.emit('userOnline', username);
-            console.log(🟢 ${username} is online (${Object.keys(onlineUsers).length} users online));
+            console.log(`🟢 ${username} is online (${Object.keys(onlineUsers).length} users online)`);
 
             // Send pending friend requests
             const pendingRequests = await FriendRequest.find({ 
@@ -371,10 +371,10 @@ io.on('connection', (socket) => {
             const recipientSocket = findSocketByUsername(to);
             if (recipientSocket) {
                 io.to(recipientSocket).emit('chatMessage', data);
-                console.log(💬 Message delivered from ${from} to ${to});
+                console.log(`💬 Message delivered from ${from} to ${to}`);
             }
 
-            console.log(💬 Message from ${from} to ${to});
+            console.log(`💬 Message from ${from} to ${to}`);
 
         } catch (error) {
             console.error('Chat message error:', error);
@@ -399,7 +399,7 @@ io.on('connection', (socket) => {
     socket.on('friendRequest', async (data) => {
         try {
             const { from, to } = data;
-            console.log(📩 Friend request from ${from} to ${to});
+            console.log(`📩 Friend request from ${from} to ${to}`);
 
             // Check if users exist
             const fromUser = await User.findOne({ username: from });
@@ -469,7 +469,7 @@ io.on('connection', (socket) => {
 
     socket.on('fileUpload', async (fileData) => {
         try {
-            console.log(📁 File upload from ${fileData.from} to ${fileData.to});
+            console.log(`📁 File upload from ${fileData.from} to ${fileData.to}`);
             
             if (!fileData.fileName || !fileData.from || !fileData.to) {
                 socket.emit('fileUploadError', { error: 'Invalid file data' });
@@ -480,7 +480,7 @@ io.on('connection', (socket) => {
             const fileMessage = new Message({
                 from: fileData.from,
                 to: fileData.to,
-                message: [FILE] ${fileData.fileName},
+                message: `[FILE] ${fileData.fileName}`,
                 timestamp: new Date(fileData.timestamp),
                 isFile: true,
                 fileData: {
@@ -501,7 +501,7 @@ io.on('connection', (socket) => {
             const recipientSocket = findSocketByUsername(fileData.to);
             if (recipientSocket) {
                 io.to(recipientSocket).emit('fileUpload', fileData);
-                console.log(✅ File delivered to ${fileData.to});
+                console.log(`✅ File delivered to ${fileData.to}`);
             }
 
         } catch (error) {
@@ -513,7 +513,7 @@ io.on('connection', (socket) => {
     socket.on('acceptFriendRequest', async (data) => {
         try {
             const { from, to } = data;
-            console.log(✅ ${to} accepted friend request from ${from});
+            console.log(`✅ ${to} accepted friend request from ${from}`);
 
             // Update friend request status
             await FriendRequest.updateOne(
@@ -555,7 +555,7 @@ io.on('connection', (socket) => {
     socket.on('rejectFriendRequest', async (data) => {
         try {
             const { from, to } = data;
-            console.log(❌ ${to} rejected friend request from ${from});
+            console.log(`❌ ${to} rejected friend request from ${from}`);
 
             // Update friend request status
             await FriendRequest.updateOne(
@@ -580,7 +580,7 @@ io.on('connection', (socket) => {
     socket.on('removeFriend', async (data) => {
         try {
             const { from, friend } = data;
-            console.log(🗑️ ${from} removed friend ${friend});
+            console.log(`🗑️ ${from} removed friend ${friend}`);
 
             // Remove friendship
             await Friend.deleteOne({
@@ -609,7 +609,7 @@ io.on('connection', (socket) => {
         if (username) {
             socket.broadcast.emit('userOffline', username);
             delete onlineUsers[socket.id];
-            console.log(🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online);
+            console.log(`🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online`);
         }
     });
 });
@@ -626,7 +626,7 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
     console.log('🚀 KryptoConnect Server Started with MongoDB!');
-    console.log(📍 Server running on port ${PORT});
+    console.log(`📍 Server running on port ${PORT}`);
     console.log('💾 Database: MongoDB');
     console.log('💬 Real-time Chat: ACTIVE');
     console.log('📁 File Sharing: ACTIVE (100MB)');
