@@ -10,6 +10,7 @@
     
     <!-- Your CSS File -->
     <link rel="stylesheet" href="style.css">
+    
     <!-- Socket.io Client Library -->
     <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -126,7 +127,7 @@
                             <!-- File upload section -->
                             <div class="file-upload-container" id="fileUploadContainer" style="display: none;">
                                 <div class="file-input-wrapper">
-                                    <input type="file" class="file-input" id="fileInput" accept="/">
+                                    <input type="file" class="file-input" id="fileInput" accept="*/*">
                                 </div>
                                 <button class="upload-btn" id="uploadBtn" disabled>
                                     <i class="fas fa-upload"></i> Upload
@@ -212,6 +213,7 @@
             </div>
         </div>
     </div>
+
     <!-- Your JavaScript File -->
     <script src="client.js"></script>
 </body>
