@@ -4,9 +4,33 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>KryptoConnect - Secure Crypto Chat</title>
+  
+  <!-- Search Engine Optimization -->
+  <meta name="description" content="Secure, encrypted real-time chat application with OTP verification, file sharing, and friend system">
+  <meta name="keywords" content="secure chat, crypto chat, real-time messaging, file sharing, OTP verification">
+  <meta name="author" content="KryptoConnect">
+  
+  <!-- Open Graph Meta Tags -->
+  <meta property="og:title" content="KryptoConnect - Secure Crypto Chat">
+  <meta property="og:description" content="Secure, encrypted real-time chat application with OTP verification">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://kryptoconnect.com">
+  
+  <!-- Security Headers -->
+  <meta http-equiv="Content-Security-Policy" 
+        content="default-src 'self'; 
+                 script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
+                 style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
+                 img-src 'self' data: https:; 
+                 connect-src 'self' ws: wss:;">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
 
   <!-- Font Awesome Icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
+        integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" 
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
 
   <!-- CSS -->
   <link rel="stylesheet" href="style.css" />
@@ -16,9 +40,9 @@
 </head>
 <body>
   <div class="container">
-    <header>
-      <div class="logo">
-        <i class="fas fa-comments"></i>
+    <header role="banner">
+      <div class="logo" aria-label="KryptoConnect Logo">
+        <i class="fas fa-comments" aria-hidden="true"></i>
       </div>
       <h1>KryptoConnect</h1>
       <p class="tagline">Secure, encrypted chat for the crypto community</p>
@@ -26,179 +50,284 @@
 
     <div class="app-container">
       <!-- Authentication Section -->
-      <section class="auth-section" id="authSection">
-        <!-- LOGIN -->
-        <div class="auth-form" id="loginForm">
-          <h2>Welcome Back</h2>
+      <section class="auth-section" id="authSection" aria-labelledby="authHeading">
+        <!-- LOGIN FORM -->
+        <div class="auth-form" id="loginForm" role="form" aria-labelledby="loginHeading">
+          <h2 id="loginHeading">Welcome Back</h2>
           <p class="subtitle">Log in to continue chatting securely</p>
 
           <div class="form-group">
             <label for="loginUsername">Username</label>
-            <input type="text" id="loginUsername" placeholder="Enter your username" />
+            <input type="text" id="loginUsername" placeholder="Enter your username" 
+                   aria-required="true" autocomplete="username" />
           </div>
+          
           <div class="form-group">
             <label for="loginPassword">Password</label>
-            <input type="password" id="loginPassword" placeholder="Enter your password" />
+            <input type="password" id="loginPassword" placeholder="Enter your password" 
+                   aria-required="true" autocomplete="current-password" />
           </div>
 
-          <button class="btn" id="loginBtn">Login</button>
-          <div class="error-message" id="loginError"></div>
+          <button class="btn" id="loginBtn" type="submit">
+            <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Login
+          </button>
+          
+          <div class="error-message" id="loginError" role="alert" aria-live="polite"></div>
 
           <div class="auth-links">
-            <a href="forgot.html">Forgot password?</a>
+            <a href="forgot.html" aria-label="Forgot password">Forgot password?</a>
           </div>
 
-          <div class="divider">or continue with</div>
+          <div class="divider" aria-hidden="true">or continue with</div>
+          
           <div class="social-login">
-            <button type="button" class="social-btn google">
-              <i class="fab fa-google"></i> Google
+            <button type="button" class="social-btn google" onclick="window.location.href='/auth/google'" 
+                    aria-label="Sign in with Google">
+              <i class="fab fa-google" aria-hidden="true"></i> Google
             </button>
-            <button type="button" class="social-btn facebook">
-              <i class="fab fa-facebook-f"></i> Facebook
+            <button type="button" class="social-btn facebook" onclick="window.location.href='/auth/facebook'" 
+                    aria-label="Sign in with Facebook">
+              <i class="fab fa-facebook-f" aria-hidden="true"></i> Facebook
             </button>
           </div>
 
           <div class="auth-toggle">
-            Don’t have an account?
-            <span id="showRegister">Sign up</span>
+            Don't have an account? 
+            <span id="showRegister" role="button" tabindex="0" aria-label="Switch to sign up form">Sign up</span>
           </div>
         </div>
 
-        <!-- REGISTER -->
-        <div class="auth-form" id="registerForm" style="display: none;">
-          <h2>Create Account</h2>
+        <!-- SIGN UP FORM WITH OTP VERIFICATION -->
+        <div class="auth-form" id="registerForm" style="display: none;" role="form" aria-labelledby="registerHeading">
+          <h2 id="registerHeading">Create Account</h2>
           <p class="subtitle">Join the secure crypto chat network</p>
 
-          <div class="form-group">
-            <label for="regUsername">Username</label>
-            <input type="text" id="regUsername" placeholder="Choose a username" />
-          </div>
+          <!-- Step 1: Basic Information -->
+          <div id="signupStep1">
+            <div class="form-group">
+              <label for="regUsername">Username</label>
+              <input type="text" id="regUsername" placeholder="Choose a username" 
+                     aria-required="true" autocomplete="username" minlength="3" maxlength="30" />
+              <small class="input-hint">3-30 characters, letters and numbers only</small>
+            </div>
 
-          <div class="form-group">
-            <label for="regEmailPhone">Email or Phone</label>
-            <input type="text" id="regEmailPhone" placeholder="Enter your email or phone" />
-          </div>
+            <div class="form-group">
+              <label for="regEmailPhone">Email or Phone Number</label>
+              <input type="text" id="regEmailPhone" placeholder="Enter email or phone" 
+                     aria-required="true" autocomplete="email" />
+              <small class="input-hint">We'll send a verification code for security</small>
+            </div>
 
-          <div class="form-group">
-            <label for="regPassword">Password</label>
-            <input type="password" id="regPassword" placeholder="Create a password" />
-          </div>
-          <div class="form-group">
-            <label for="regConfirmPassword">Confirm Password</label>
-            <input type="password" id="regConfirmPassword" placeholder="Confirm your password" />
-          </div>
+            <div class="form-group">
+              <label for="regPassword">Password</label>
+              <input type="password" id="regPassword" placeholder="Create a password" 
+                     aria-required="true" autocomplete="new-password" minlength="6" />
+              <small class="input-hint">Minimum 6 characters</small>
+            </div>
+            
+            <div class="form-group">
+              <label for="regConfirmPassword">Confirm Password</label>
+              <input type="password" id="regConfirmPassword" placeholder="Confirm your password" 
+                     aria-required="true" autocomplete="new-password" />
+            </div>
 
-          <button class="btn" id="registerBtn">Sign Up</button>
-          <div class="error-message" id="regError"></div>
-
-          <div class="divider">or continue with</div>
-          <div class="social-login">
-            <button type="button" class="social-btn google">
-              <i class="fab fa-google"></i> Google
+            <button class="btn" id="sendOtpBtn" type="button">
+              <i class="fas fa-shield-alt" aria-hidden="true"></i> Send Verification Code
             </button>
-            <button type="button" class="social-btn facebook">
-              <i class="fab fa-facebook-f"></i> Facebook
+            
+            <div class="error-message" id="regError" role="alert" aria-live="polite"></div>
+          </div>
+
+          <!-- Step 2: OTP Verification -->
+          <div id="signupStep2" style="display: none;" aria-labelledby="otpHeading">
+            <h3 id="otpHeading" style="text-align: center; color: var(--primary); margin-bottom: 20px;">
+              Verify Your Account
+            </h3>
+            
+            <div class="form-group">
+              <label for="regOtp">Verification Code</label>
+              <input type="text" id="regOtp" placeholder="Enter 6-digit code" 
+                     aria-required="true" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" 
+                     aria-describedby="otpHelp" />
+              <small id="otpHelp" class="input-hint">
+                Code sent to <span id="otpSentTo" style="font-weight: bold;">email/phone</span>
+              </small>
+            </div>
+
+            <div class="otp-timer" role="timer" aria-live="polite">
+              <i class="fas fa-clock" aria-hidden="true"></i>
+              <span id="otpTimer">02:00</span>
+            </div>
+
+            <button class="btn" id="verifyOtpBtn" type="button">
+              <i class="fas fa-check-circle" aria-hidden="true"></i> Verify & Create Account
+            </button>
+            
+            <button class="btn-secondary" id="resendOtpBtn" type="button" disabled>
+              <i class="fas fa-redo" aria-hidden="true"></i> Resend Code
+            </button>
+            
+            <div class="error-message" id="otpError" role="alert" aria-live="polite"></div>
+          </div>
+
+          <div class="divider" aria-hidden="true">or sign up with</div>
+          
+          <div class="social-login">
+            <button type="button" class="social-btn google" onclick="window.location.href='/auth/google'" 
+                    aria-label="Sign up with Google">
+              <i class="fab fa-google" aria-hidden="true"></i> Google
+            </button>
+            <button type="button" class="social-btn facebook" onclick="window.location.href='/auth/facebook'" 
+                    aria-label="Sign up with Facebook">
+              <i class="fab fa-facebook-f" aria-hidden="true"></i> Facebook
             </button>
           </div>
 
           <div class="auth-toggle">
-            Already have an account?
-            <span id="showLogin">Login</span>
+            Already have an account? 
+            <span id="showLogin" role="button" tabindex="0" aria-label="Switch to login form">Login</span>
           </div>
         </div>
       </section>
 
       <!-- CHAT SECTION -->
-      <section class="chat-section" id="chatSection" style="display: none;">
-        <div class="chat-header">
-          <div class="chat-title">KryptoConnect Chat</div>
+      <section class="chat-section" id="chatSection" style="display: none;" aria-labelledby="chatHeading">
+        <div class="chat-header" role="banner">
+          <div class="chat-title" id="chatHeading">
+            <i class="fas fa-comments" aria-hidden="true"></i>
+            KryptoConnect Chat
+          </div>
           <div class="user-info">
-            <div class="user-avatar" id="userAvatar">U</div>
-            <span id="usernameDisplay">User</span>
-            <button class="logout-btn" id="logoutBtn">Logout</button>
+            <div class="user-avatar" id="userAvatar" aria-label="User avatar">U</div>
+            <span id="usernameDisplay" aria-label="Current user">User</span>
+            <button class="logout-btn" id="logoutBtn" aria-label="Logout">
+              <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Logout
+            </button>
           </div>
         </div>
 
-        <div class="chat-container">
-          <div class="sidebar">
-            <div class="sidebar-section">
-              <h3 class="sidebar-title">
+        <div class="chat-container" role="main">
+          <!-- Sidebar - Friends & Users List -->
+          <aside class="sidebar" role="complementary" aria-label="Friends and users list">
+            <div class="sidebar-section" aria-labelledby="friendsHeading">
+              <h3 class="sidebar-title" id="friendsHeading">
+                <i class="fas fa-user-friends" aria-hidden="true"></i>
                 My Friends
-                <button class="add-friend-btn" id="addFriendBtn" title="Add Friend">
-                  <i class="fas fa-user-plus"></i>
+                <button class="add-friend-btn" id="addFriendBtn" 
+                        aria-label="Add new friend" title="Add Friend">
+                  <i class="fas fa-user-plus" aria-hidden="true"></i>
                 </button>
               </h3>
-              <ul class="users-list" id="friendsList"></ul>
+              <ul class="users-list" id="friendsList" role="list" aria-label="Friends list">
+                <!-- Friends will be populated dynamically -->
+              </ul>
             </div>
 
-            <div class="sidebar-section">
-              <h3 class="sidebar-title">All Users</h3>
-              <ul class="users-list" id="usersList"></ul>
+            <div class="sidebar-section" aria-labelledby="usersHeading">
+              <h3 class="sidebar-title" id="usersHeading">
+                <i class="fas fa-users" aria-hidden="true"></i>
+                All Users
+              </h3>
+              <ul class="users-list" id="usersList" role="list" aria-label="All users list">
+                <!-- Users will be populated dynamically -->
+              </ul>
             </div>
-          </div>
+          </aside>
 
-          <div class="chat-main">
-            <div class="chat-with-info" id="chatWithInfo" style="display: none;">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="user-status"></div>
-                <span id="chatWithName">User</span>
+          <!-- Main Chat Area -->
+          <div class="chat-main" role="region" aria-labelledby="currentChatHeading">
+            <!-- Current Chat Header -->
+            <div class="chat-with-info" id="chatWithInfo" style="display: none;" 
+                 aria-labelledby="currentChatHeading">
+              <div class="current-chat-user">
+                <div class="user-status" aria-hidden="true"></div>
+                <span id="chatWithName" aria-label="Currently chatting with">User</span>
               </div>
               <div class="chat-actions">
-                <button class="btn-secondary" id="clearChatBtn">Clear Chat</button>
+                <button class="btn-secondary" id="clearChatBtn" 
+                        aria-label="Clear chat history">
+                  <i class="fas fa-trash" aria-hidden="true"></i> Clear Chat
+                </button>
               </div>
             </div>
 
-            <div class="messages-container" id="messagesContainer">
-              <div class="no-chat-selected" id="noChatSelected">
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer" 
+                 role="log" aria-label="Chat messages" aria-live="polite">
+              
+              <!-- Initial State - No Chat Selected -->
+              <div class="no-chat-selected" id="noChatSelected" aria-live="polite">
                 <div>
-                  <i class="fas fa-comments" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i>
+                  <i class="fas fa-comments" aria-hidden="true"></i>
                   <h3>Welcome to KryptoConnect!</h3>
                   <p>Select a friend from your list to start chatting or add new friends using the + button.</p>
                 </div>
               </div>
             </div>
 
-            <div class="typing-indicator" id="typingIndicator"></div>
+            <!-- Typing Indicator -->
+            <div class="typing-indicator" id="typingIndicator" 
+                 role="status" aria-live="polite" aria-atomic="true"></div>
 
-            <!-- MESSAGE INPUT & FILE UPLOAD -->
-            <div class="message-input-container">
-              <div class="file-upload-container" id="fileUploadContainer" style="display: none;">
+            <!-- Message Input & File Upload Area -->
+            <div class="message-input-container" role="form" aria-labelledby="messageInputLabel">
+              
+              <!-- File Upload Section -->
+              <div class="file-upload-container" id="fileUploadContainer" style="display: none;"
+                   aria-label="File upload options">
                 <div class="file-input-wrapper">
-                  <input type="file" class="file-input" id="fileInput" accept="*/*" />
+                  <input type="file" class="file-input" id="fileInput" 
+                         accept="*/*" aria-label="Select file to upload" />
                 </div>
-                <button class="upload-btn" id="uploadBtn" disabled>
-                  <i class="fas fa-upload"></i> Upload
+                <button class="upload-btn" id="uploadBtn" disabled
+                        aria-label="Upload selected file">
+                  <i class="fas fa-upload" aria-hidden="true"></i> Upload
                 </button>
               </div>
 
-              <div class="file-preview" id="filePreview">
+              <!-- File Preview -->
+              <div class="file-preview" id="filePreview" style="display: none;"
+                   role="region" aria-label="File preview">
                 <div class="file-info">
-                  <i class="fas fa-file file-icon" id="filePreviewIcon"></i>
+                  <i class="fas fa-file file-icon" id="filePreviewIcon" aria-hidden="true"></i>
                   <div class="file-details">
                     <div class="file-name" id="filePreviewName">filename.ext</div>
                     <div class="file-size" id="filePreviewSize">0 MB</div>
                   </div>
-                  <button class="file-remove" id="fileRemoveBtn">
-                    <i class="fas fa-times"></i>
+                  <button class="file-remove" id="fileRemoveBtn" 
+                          aria-label="Remove selected file">
+                    <i class="fas fa-times" aria-hidden="true"></i>
                   </button>
                 </div>
-                <img src="" class="file-preview-image" id="filePreviewImage" alt="File preview" />
-                <div class="upload-progress">
-                  <div class="progress-bar" id="uploadProgressBar"></div>
+                <img src="" class="file-preview-image" id="filePreviewImage" 
+                     alt="File preview" style="display: none;" />
+                <div class="upload-progress" aria-label="Upload progress">
+                  <div class="progress-bar" id="uploadProgressBar" 
+                       role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                 </div>
               </div>
 
-              <div class="upload-info" id="uploadInfo">
+              <!-- Upload Information -->
+              <div class="upload-info" id="uploadInfo" aria-live="polite">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
                 Maximum file size: 100MB • Supported: Images, Videos, Documents
               </div>
 
-              <div style="display: flex; gap: 10px; width: 100%;">
-                <button class="btn-secondary" id="attachFileBtn" style="white-space: nowrap;">
-                  <i class="fas fa-paperclip"></i>
+              <!-- Message Input Row -->
+              <div class="message-input-row">
+                <button class="btn-secondary" id="attachFileBtn" 
+                        aria-label="Attach file" title="Attach File">
+                  <i class="fas fa-paperclip" aria-hidden="true"></i>
                 </button>
-                <input type="text" class="message-input" id="messageInput" placeholder="Select a friend to start chatting..." disabled />
-                <button class="send-btn" id="sendBtn" disabled>
-                  <i class="fas fa-paper-plane"></i>
+                
+                <input type="text" class="message-input" id="messageInput" 
+                       placeholder="Select a friend to start chatting..." 
+                       disabled aria-label="Type your message" 
+                       aria-describedby="messageInputLabel" />
+                
+                <button class="send-btn" id="sendBtn" disabled
+                        aria-label="Send message">
+                  <i class="fas fa-paper-plane" aria-hidden="true"></i>
                 </button>
               </div>
             </div>
@@ -208,44 +337,109 @@
     </div>
 
     <!-- Features Section -->
-    <div class="features">
-      <div class="feature-card">
-        <div class="feature-icon"><i class="fas fa-lock"></i></div>
-        <h3 class="feature-title">End-to-End Encryption</h3>
+    <section class="features" aria-labelledby="featuresHeading">
+      <h2 id="featuresHeading" class="sr-only">Key Features</h2>
+      
+      <div class="feature-card" role="article" aria-labelledby="feature1Heading">
+        <div class="feature-icon" aria-hidden="true">
+          <i class="fas fa-lock"></i>
+        </div>
+        <h3 id="feature1Heading" class="feature-title">End-to-End Encryption</h3>
         <p>Your messages are secured with military-grade encryption. Only you and the recipient can read them.</p>
       </div>
 
-      <div class="feature-card">
-        <div class="feature-icon"><i class="fas fa-user-friends"></i></div>
-        <h3 class="feature-title">Friends System</h3>
-        <p>Add friends to your network and chat privately with ease.</p>
+      <div class="feature-card" role="article" aria-labelledby="feature2Heading">
+        <div class="feature-icon" aria-hidden="true">
+          <i class="fas fa-user-friends"></i>
+        </div>
+        <h3 id="feature2Heading" class="feature-title">Friends System</h3>
+        <p>Add friends to your network and chat privately with ease. Manage your connections securely.</p>
       </div>
 
-      <div class="feature-card">
-        <div class="feature-icon"><i class="fas fa-bolt"></i></div>
-        <h3 class="feature-title">Real-time Chat</h3>
-        <p>Experience lightning-fast, live crypto conversations.</p>
+      <div class="feature-card" role="article" aria-labelledby="feature3Heading">
+        <div class="feature-icon" aria-hidden="true">
+          <i class="fas fa-bolt"></i>
+        </div>
+        <h3 id="feature3Heading" class="feature-title">Real-time Chat</h3>
+        <p>Experience lightning-fast, live conversations with real-time messaging and typing indicators.</p>
       </div>
-    </div>
+
+      <div class="feature-card" role="article" aria-labelledby="feature4Heading">
+        <div class="feature-icon" aria-hidden="true">
+          <i class="fas fa-shield-alt"></i>
+        </div>
+        <h3 id="feature4Heading" class="feature-title">OTP Verification</h3>
+        <p>Secure account creation with email/phone verification. Your security is our priority.</p>
+      </div>
+
+      <div class="feature-card" role="article" aria-labelledby="feature5Heading">
+        <div class="feature-icon" aria-hidden="true">
+          <i class="fas fa-file-upload"></i>
+        </div>
+        <h3 id="feature5Heading" class="feature-title">File Sharing</h3>
+        <p>Share images, documents, and files up to 100MB with end-to-end encryption.</p>
+      </div>
+
+      <div class="feature-card" role="article" aria-labelledby="feature6Heading">
+        <div class="feature-icon" aria-hidden="true">
+          <i class="fas fa-mobile-alt"></i>
+        </div>
+        <h3 id="feature6Heading" class="feature-title">Responsive Design</h3>
+        <p>Chat seamlessly on any device - desktop, tablet, or mobile with our responsive interface.</p>
+      </div>
+    </section>
 
     <!-- Add Friend Modal -->
-    <div class="modal" id="addFriendModal">
+    <div class="modal" id="addFriendModal" role="dialog" aria-labelledby="modalHeading" 
+         aria-modal="true" style="display: none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="modal-title">Add Friend</h3>
-          <button class="close-modal" id="closeModal">&times;</button>
+          <h3 class="modal-title" id="modalHeading">
+            <i class="fas fa-user-plus" aria-hidden="true"></i>
+            Add Friend
+          </h3>
+          <button class="close-modal" id="closeModal" aria-label="Close modal">
+            <i class="fas fa-times" aria-hidden="true"></i>
+          </button>
         </div>
+        
         <div class="form-group">
           <label for="friendUsername">Username</label>
-          <input type="text" id="friendUsername" placeholder="Enter username to add" />
+          <input type="text" id="friendUsername" placeholder="Enter username to add" 
+                 aria-required="true" />
         </div>
-        <button class="btn" id="sendFriendRequestBtn">Send Request</button>
-        <div class="error-message" id="friendError"></div>
+        
+        <button class="btn" id="sendFriendRequestBtn">
+          <i class="fas fa-paper-plane" aria-hidden="true"></i> Send Request
+        </button>
+        
+        <div class="error-message" id="friendError" role="alert" aria-live="polite"></div>
       </div>
     </div>
   </div>
 
+  <!-- Loading Spinner -->
+  <div class="loading-spinner" id="loadingSpinner" style="display: none;" 
+       role="status" aria-label="Loading">
+    <div class="spinner"></div>
+    <p>Loading...</p>
+  </div>
+
+  <!-- Screen Reader Only Text -->
+  <div class="sr-only" aria-live="polite" aria-atomic="true">
+    <span id="pageStatus">KryptoConnect secure chat application loaded</span>
+  </div>
+
   <!-- JavaScript -->
   <script src="client.js"></script>
+
+  <!-- Global Site Tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'GA_MEASUREMENT_ID');
+  </script>
 </body>
 </html>
