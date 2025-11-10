@@ -1,3 +1,8 @@
+// ============================
+// KryptoConnect - Server.js
+// ============================
+
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const http = require('http');
@@ -6,629 +11,274 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const fs = require('fs');
+const session = require('express-session');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+  cors: { origin: '*', methods: ['GET', 'POST'] }
 });
 
 // Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// === Sessions ===
+app.use(session({
+  secret: 'kryptoconnect_secret_key',
+  resave: false,
+  saveUninitialized: false
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ============================
 // MongoDB Connection
+// ============================
+
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kryptoconnect';
+mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log('✅ MongoDB Connected Successfully!'))
+  .catch(err => console.error('❌ MongoDB connection error:', err));
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => {
-  console.log('✅ MongoDB Connected Successfully!');
-})
-.catch(err => {
-  console.error('❌ MongoDB connection error:', err);
-});
+// ============================
+// File Upload Config
+// ============================
 
-// File Upload Configuration
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true });
-}
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
-        cb(null, uniqueName);
-    }
+  destination: (req, file, cb) => cb(null, 'uploads/'),
+  filename: (req, file, cb) => {
+    const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
+    cb(null, uniqueName);
+  }
 });
+const upload = multer({ storage, limits: { fileSize: 100 * 1024 * 1024 } });
 
-const upload = multer({ 
-    storage: storage,
-    limits: {
-        fileSize: 100 * 1024 * 1024 // 100MB
-    }
-});
-
+// ============================
 // MongoDB Schemas
+// ============================
+
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  email: { type: String },
   joined: { type: Date, default: Date.now },
   lastSeen: { type: Date, default: Date.now }
 });
-
 const messageSchema = new mongoose.Schema({
-  from: { type: String, required: true },
-  to: { type: String, required: true },
-  message: { type: String, required: true },
+  from: String,
+  to: String,
+  message: String,
   timestamp: { type: Date, default: Date.now },
   isFile: { type: Boolean, default: false },
   fileData: { type: Object, default: null }
 });
-
 const friendRequestSchema = new mongoose.Schema({
-  from: { type: String, required: true },
-  to: { type: String, required: true },
+  from: String,
+  to: String,
   status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
   timestamp: { type: Date, default: Date.now }
 });
-
 const friendSchema = new mongoose.Schema({
-  user1: { type: String, required: true },
-  user2: { type: String, required: true },
+  user1: String,
+  user2: String,
   timestamp: { type: Date, default: Date.now }
 });
 
-// MongoDB Models
 const User = mongoose.model('User', userSchema);
 const Message = mongoose.model('Message', messageSchema);
 const FriendRequest = mongoose.model('FriendRequest', friendRequestSchema);
 const Friend = mongoose.model('Friend', friendSchema);
 
-// In-memory storage for online users
-const onlineUsers = {};
+// ============================
+// Passport Serialization
+// ============================
 
-// Serve index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  const user = await User.findById(id);
+  done(null, user);
 });
 
-// ✅ FILE UPLOAD ENDPOINT
+// ============================
+// Google OAuth Strategy
+// ============================
+
+passport.use(new GoogleStrategy({
+  clientID: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: "/auth/google/callback"
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const email = profile.emails[0].value;
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = new User({
+        username: profile.displayName,
+        email,
+        password: await bcrypt.hash('google-login', 10)
+      });
+      await user.save();
+    }
+    done(null, user);
+  } catch (err) {
+    done(err, null);
+  }
+}));
+
+// ============================
+// Facebook OAuth Strategy
+// ============================
+
+passport.use(new FacebookStrategy({
+  clientID: process.env.FACEBOOK_APP_ID,
+  clientSecret: process.env.FACEBOOK_APP_SECRET,
+  callbackURL: "/auth/facebook/callback",
+  profileFields: ['id', 'displayName', 'emails']
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const email = profile.emails?.[0]?.value || `${profile.id}@facebook.com`;
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = new User({
+        username: profile.displayName,
+        email,
+        password: await bcrypt.hash('facebook-login', 10)
+      });
+      await user.save();
+    }
+    done(null, user);
+  } catch (err) {
+    done(err, null);
+  }
+}));
+
+// ============================
+// Basic Routes
+// ============================
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// === Google Auth Routes ===
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login.html' }),
+  (req, res) => res.redirect('/')
+);
+
+// === Facebook Auth Routes ===
+app.get('/auth/facebook', passport.authenticate('facebook', { scope: ['email'] }));
+app.get('/auth/facebook/callback',
+  passport.authenticate('facebook', { failureRedirect: '/login.html' }),
+  (req, res) => res.redirect('/')
+);
+
+// ============================
+// File Upload & Download APIs
+// ============================
+
 app.post('/api/upload', upload.single('file'), async (req, res) => {
-    try {
-        console.log('📁 File upload request received');
-        
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
-        }
-
-        const fileData = {
-            fileName: req.file.originalname,
-            fileSize: req.file.size,
-            fileType: req.file.mimetype,
-            filePath: `/uploads/${req.file.filename}`,
-            fileUrl: `/api/download/${req.file.filename}`,
-            timestamp: Date.now()
-        };
-
-        console.log(`✅ File uploaded: ${fileData.fileName}`);
-        res.json(fileData);
-
-    } catch (error) {
-        console.error('Upload error:', error);
-        res.status(500).json({ error: 'File upload failed' });
-    }
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const fileData = {
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      fileType: req.file.mimetype,
+      filePath: `/uploads/${req.file.filename}`,
+      fileUrl: `/api/download/${req.file.filename}`,
+      timestamp: Date.now()
+    };
+    res.json(fileData);
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'File upload failed' });
+  }
 });
 
-// ✅ FILE DOWNLOAD ENDPOINT
 app.get('/api/download/:filename', (req, res) => {
-    try {
-        const filename = req.params.filename;
-        const filePath = path.join(__dirname, 'uploads', filename);
-        
-        console.log(`📥 Download request for: ${filename}`);
-        
-        // Check if file exists
-        if (!fs.existsSync(filePath)) {
-            console.log('❌ File not found:', filename);
-            return res.status(404).json({ error: 'File not found' });
-        }
-
-        // Get original filename from database or use stored name
-        const originalName = req.query.original || filename;
-
-        // Set headers for download
-        res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
-        res.setHeader('Content-Type', 'application/octet-stream');
-
-        // Stream file to response
-        const fileStream = fs.createReadStream(filePath);
-        fileStream.pipe(res);
-
-        console.log(`✅ File download started: ${filename}`);
-
-    } catch (error) {
-        console.error('Download error:', error);
-        res.status(500).json({ error: 'Download failed' });
-    }
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File not found' });
+  res.download(filePath);
 });
-
-// Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// API Routes
+// ============================
+// Auth & User APIs
+// ============================
+
 app.post('/api/register', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password are required' });
-        }
-
-        if (username.length < 3) {
-            return res.status(400).json({ error: 'Username must be at least 3 characters' });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'Password must be at least 6 characters' });
-        }
-
-        const existingUser = await User.findOne({ username });
-        if (existingUser) {
-            return res.status(400).json({ error: 'Username already exists' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = new User({
-            username: username.trim(),
-            password: hashedPassword
-        });
-
-        await newUser.save();
-        
-        console.log(`👤 New user registered: ${username}`);
-        res.json({ 
-            message: 'Registration successful', 
-            user: { username: newUser.username } 
-        });
-
-    } catch (error) {
-        console.error('Registration error:', error);
-        res.status(500).json({ error: 'Registration failed' });
-    }
+  try {
+    const { username, password } = req.body;
+    if (!username || !password)
+      return res.status(400).json({ error: 'Username and password are required' });
+    if (await User.findOne({ username }))
+      return res.status(400).json({ error: 'Username already exists' });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ username: username.trim(), password: hashedPassword });
+    await newUser.save();
+    res.json({ message: 'Registration successful', user: { username: newUser.username } });
+  } catch (error) {
+    res.status(500).json({ error: 'Registration failed' });
+  }
 });
 
 app.post('/api/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Username and password are required' });
-        }
-
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        user.lastSeen = new Date();
-        await user.save();
-
-        console.log(`🔐 User logged in: ${username}`);
-        res.json({ 
-            message: 'Login successful', 
-            user: { username: user.username } 
-        });
-
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Login failed' });
-    }
+  try {
+    const { username, password } = req.body;
+    const user = await User.findOne({ username });
+    if (!user || !(await bcrypt.compare(password, user.password)))
+      return res.status(401).json({ error: 'Invalid credentials' });
+    user.lastSeen = new Date();
+    await user.save();
+    res.json({ message: 'Login successful', user: { username: user.username } });
+  } catch (error) {
+    res.status(500).json({ error: 'Login failed' });
+  }
 });
 
-app.get('/api/users', async (req, res) => {
-    try {
-        const users = await User.find({}, 'username lastSeen');
-        const usersWithOnlineStatus = users.map(user => ({
-            username: user.username,
-            lastSeen: user.lastSeen,
-            isOnline: Object.values(onlineUsers).includes(user.username)
-        }));
-        res.json(usersWithOnlineStatus);
-    } catch (error) {
-        console.error('Error loading users:', error);
-        res.status(500).json({ error: 'Failed to load users' });
-    }
-});
+// ============================
+// Socket.IO Real-Time Chat
+// ============================
 
-app.get('/api/friend-requests/:username', async (req, res) => {
-    try {
-        const { username } = req.params;
-        const requests = await FriendRequest.find({ 
-            to: username, 
-            status: 'pending' 
-        });
-        res.json(requests);
-    } catch (error) {
-        console.error('Error loading friend requests:', error);
-        res.status(500).json({ error: 'Failed to load friend requests' });
-    }
-});
-
-app.get('/api/friends/:username', async (req, res) => {
-    try {
-        const { username } = req.params;
-        
-        const friends1 = await Friend.find({ user1: username });
-        const friends2 = await Friend.find({ user2: username });
-        
-        const allFriends = [
-            ...friends1.map(f => f.user2),
-            ...friends2.map(f => f.user1)
-        ];
-        
-        res.json(allFriends);
-    } catch (error) {
-        console.error('Error loading friends:', error);
-        res.status(500).json({ error: 'Failed to load friends' });
-    }
-});
-
-// Get chat history
-app.get('/api/messages/:user1/:user2', async (req, res) => {
-    try {
-        const { user1, user2 } = req.params;
-        
-        const messages = await Message.find({
-            $or: [
-                { from: user1, to: user2 },
-                { from: user2, to: user1 }
-            ]
-        }).sort({ timestamp: 1 });
-        
-        res.json(messages);
-    } catch (error) {
-        console.error('Error loading messages:', error);
-        res.status(500).json({ error: 'Failed to load messages' });
-    }
-});
-
-// Socket.IO Connection Handling
+const onlineUsers = {};
 io.on('connection', (socket) => {
-    console.log('✅ A user connected:', socket.id);
+  console.log('✅ A user connected:', socket.id);
 
-    socket.on('userLogin', async (username) => {
-        try {
-            const user = await User.findOne({ username });
-            if (!user) {
-                socket.emit('error', { message: 'User not found' });
-                return;
-            }
+  socket.on('userLogin', async (username) => {
+    onlineUsers[socket.id] = username;
+    socket.broadcast.emit('userOnline', username);
+  });
 
-            onlineUsers[socket.id] = username;
-            user.lastSeen = new Date();
-            await user.save();
-            
-            socket.broadcast.emit('userOnline', username);
-            console.log(`🟢 ${username} is online (${Object.keys(onlineUsers).length} users online)`);
+  socket.on('chatMessage', async (data) => {
+    const { from, to, message } = data;
+    const newMessage = new Message({ from, to, message, timestamp: new Date() });
+    await newMessage.save();
+    const recipientSocket = Object.entries(onlineUsers).find(([_, user]) => user === to)?.[0];
+    if (recipientSocket) io.to(recipientSocket).emit('chatMessage', data);
+  });
 
-            // Send pending friend requests
-            const pendingRequests = await FriendRequest.find({ 
-                to: username, 
-                status: 'pending' 
-            });
-            
-            if (pendingRequests.length > 0) {
-                pendingRequests.forEach(request => {
-                    socket.emit('friendRequest', {
-                        from: request.from,
-                        to: username,
-                        timestamp: request.timestamp
-                    });
-                });
-            }
-
-        } catch (error) {
-            console.error('Login error:', error);
-            socket.emit('error', { message: 'Login failed' });
-        }
-    });
-
-    socket.on('chatMessage', async (data) => {
-        try {
-            const { from, to, message, timestamp } = data;
-
-            if (!from || !to || !message) {
-                socket.emit('error', { message: 'Invalid message data' });
-                return;
-            }
-
-            // Save message to database
-            const newMessage = new Message({
-                from,
-                to,
-                message: message.trim(),
-                timestamp: new Date(timestamp)
-            });
-
-            await newMessage.save();
-
-            // Send to recipient
-            const recipientSocket = findSocketByUsername(to);
-            if (recipientSocket) {
-                io.to(recipientSocket).emit('chatMessage', data);
-                console.log(`💬 Message delivered from ${from} to ${to}`);
-            }
-
-            console.log(`💬 Message from ${from} to ${to}`);
-
-        } catch (error) {
-            console.error('Chat message error:', error);
-            socket.emit('error', { message: 'Failed to send message' });
-        }
-    });
-
-    socket.on('typingStart', (data) => {
-        const recipientSocket = findSocketByUsername(data.to);
-        if (recipientSocket) {
-            io.to(recipientSocket).emit('typingStart', { from: data.from });
-        }
-    });
-
-    socket.on('typingStop', (data) => {
-        const recipientSocket = findSocketByUsername(data.to);
-        if (recipientSocket) {
-            io.to(recipientSocket).emit('typingStop', { from: data.from });
-        }
-    });
-
-    socket.on('friendRequest', async (data) => {
-        try {
-            const { from, to } = data;
-            console.log(`📩 Friend request from ${from} to ${to}`);
-
-            // Check if users exist
-            const fromUser = await User.findOne({ username: from });
-            const toUser = await User.findOne({ username: to });
-            
-            if (!fromUser || !toUser) {
-                socket.emit('friendRequestError', { error: 'User not found' });
-                return;
-            }
-
-            if (from === to) {
-                socket.emit('friendRequestError', { error: 'Cannot send friend request to yourself' });
-                return;
-            }
-
-            // Check if already friends
-            const existingFriendship = await Friend.findOne({
-                $or: [
-                    { user1: from, user2: to },
-                    { user1: to, user2: from }
-                ]
-            });
-
-            if (existingFriendship) {
-                socket.emit('friendRequestError', { error: 'Already friends' });
-                return;
-            }
-
-            // Check if pending request already exists
-            const existingRequest = await FriendRequest.findOne({
-                from: from,
-                to: to,
-                status: 'pending'
-            });
-
-            if (existingRequest) {
-                socket.emit('friendRequestError', { error: 'Request already sent' });
-                return;
-            }
-
-            // Create friend request
-            const friendRequest = new FriendRequest({
-                from: from,
-                to: to,
-                status: 'pending'
-            });
-
-            await friendRequest.save();
-
-            // Notify recipient
-            const toSocket = findSocketByUsername(to);
-            if (toSocket) {
-                io.to(toSocket).emit('friendRequest', {
-                    from: from,
-                    to: to,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            socket.emit('friendRequestSent', { to: to });
-
-        } catch (error) {
-            console.error('Friend request error:', error);
-            socket.emit('friendRequestError', { error: 'Failed to send friend request' });
-        }
-    });
-
-    socket.on('fileUpload', async (fileData) => {
-        try {
-            console.log(`📁 File upload from ${fileData.from} to ${fileData.to}`);
-            
-            if (!fileData.fileName || !fileData.from || !fileData.to) {
-                socket.emit('fileUploadError', { error: 'Invalid file data' });
-                return;
-            }
-
-            // Save file message to database
-            const fileMessage = new Message({
-                from: fileData.from,
-                to: fileData.to,
-                message: `[FILE] ${fileData.fileName}`,
-                timestamp: new Date(fileData.timestamp),
-                isFile: true,
-                fileData: {
-                    fileName: fileData.fileName,
-                    fileSize: fileData.fileSize,
-                    fileType: fileData.fileType,
-                    filePath: fileData.filePath,
-                    fileUrl: fileData.fileUrl,
-                    from: fileData.from,
-                    to: fileData.to,
-                    timestamp: fileData.timestamp
-                }
-            });
-
-            await fileMessage.save();
-
-            // Send to recipient
-            const recipientSocket = findSocketByUsername(fileData.to);
-            if (recipientSocket) {
-                io.to(recipientSocket).emit('fileUpload', fileData);
-                console.log(`✅ File delivered to ${fileData.to}`);
-            }
-
-        } catch (error) {
-            console.error('File upload error:', error);
-            socket.emit('fileUploadError', { error: 'File upload failed' });
-        }
-    });
-
-    socket.on('acceptFriendRequest', async (data) => {
-        try {
-            const { from, to } = data;
-            console.log(`✅ ${to} accepted friend request from ${from}`);
-
-            // Update friend request status
-            await FriendRequest.updateOne(
-                { from: from, to: to, status: 'pending' },
-                { status: 'accepted' }
-            );
-
-            // Create friendship
-            const friendship = new Friend({
-                user1: from,
-                user2: to
-            });
-
-            await friendship.save();
-
-            // Notify both users
-            const fromSocket = findSocketByUsername(from);
-            const toSocket = findSocketByUsername(to);
-
-            if (fromSocket) {
-                io.to(fromSocket).emit('friendRequestAccepted', {
-                    from: to,
-                    to: from
-                });
-            }
-
-            if (toSocket) {
-                io.to(toSocket).emit('friendRequestAccepted', {
-                    from: from,
-                    to: to
-                });
-            }
-
-        } catch (error) {
-            console.error('Accept friend request error:', error);
-        }
-    });
-
-    socket.on('rejectFriendRequest', async (data) => {
-        try {
-            const { from, to } = data;
-            console.log(`❌ ${to} rejected friend request from ${from}`);
-
-            // Update friend request status
-            await FriendRequest.updateOne(
-                { from: from, to: to, status: 'pending' },
-                { status: 'rejected' }
-            );
-
-            // Notify sender
-            const fromSocket = findSocketByUsername(from);
-            if (fromSocket) {
-                io.to(fromSocket).emit('friendRequestRejected', {
-                    from: to,
-                    to: from
-                });
-            }
-
-        } catch (error) {
-            console.error('Reject friend request error:', error);
-        }
-    });
-
-    socket.on('removeFriend', async (data) => {
-        try {
-            const { from, friend } = data;
-            console.log(`🗑️ ${from} removed friend ${friend}`);
-
-            // Remove friendship
-            await Friend.deleteOne({
-                $or: [
-                    { user1: from, user2: friend },
-                    { user1: friend, user2: from }
-                ]
-            });
-
-            // Notify friend
-            const friendSocket = findSocketByUsername(friend);
-            if (friendSocket) {
-                io.to(friendSocket).emit('friendRemoved', {
-                    from: from,
-                    friend: friend
-                });
-            }
-
-        } catch (error) {
-            console.error('Remove friend error:', error);
-        }
-    });
-
-    socket.on('disconnect', (reason) => {
-        const username = onlineUsers[socket.id];
-        if (username) {
-            socket.broadcast.emit('userOffline', username);
-            delete onlineUsers[socket.id];
-            console.log(`🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online`);
-        }
-    });
+  socket.on('disconnect', () => {
+    const username = onlineUsers[socket.id];
+    delete onlineUsers[socket.id];
+    socket.broadcast.emit('userOffline', username);
+  });
 });
 
-// Helper Functions
-function findSocketByUsername(username) {
-    for (let [socketId, user] of Object.entries(onlineUsers)) {
-        if (user === username) return socketId;
-    }
-    return null;
-}
+// ============================
+// Start Server
+// ============================
 
 const PORT = process.env.PORT || 3000;
-
 server.listen(PORT, () => {
-    console.log('🚀 KryptoConnect Server Started with MongoDB!');
-    console.log(`📍 Server running on port ${PORT}`);
-    console.log('💾 Database: MongoDB');
-    console.log('💬 Real-time Chat: ACTIVE');
-    console.log('📁 File Sharing: ACTIVE (100MB)');
-    console.log('📂 Uploads Directory: ./uploads/');
+  console.log(`🚀 KryptoConnect Server Running on Port ${PORT}`);
+  console.log('💬 Real-time Chat, 📁 File Sharing, 🔐 OAuth Active');
 });
