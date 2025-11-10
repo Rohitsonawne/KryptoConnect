@@ -1,16 +1,25 @@
 // ============================
-// KryptoConnect - Enhanced Client.js
+// KryptoConnect - Enhanced Client.js (FIXED)
 // ============================
 
+// Improved Socket connection with better error handling
 const socket = io({
   auth: {
     username: localStorage.getItem('kryptoconnect_current_user') || ''
-  }
+  },
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
 });
 
 // Safe element getter with null checks
 function $id(id) { 
-  return document.getElementById(id); 
+  const element = document.getElementById(id);
+  if (!element) {
+    console.warn(`Element with id '${id}' not found`);
+  }
+  return element;
 }
 
 // Page detection
@@ -35,7 +44,8 @@ const APP_STATE = {
   otpTimer: null,
   otpTimeLeft: 120,
   currentEmailPhone: '',
-  pendingRequests: []
+  pendingRequests: [],
+  socketConnected: false
 };
 
 const CONFIG = {
@@ -104,6 +114,14 @@ function maskEmailPhone(input) {
 }
 
 function showNotification(message, type = 'info') {
+  // Remove existing notifications of same type
+  const existingNotifications = document.querySelectorAll('.notification');
+  existingNotifications.forEach(notif => {
+    if (notif.textContent.includes(message)) {
+      notif.remove();
+    }
+  });
+
   const notification = document.createElement('div');
   notification.className = 'notification';
   
@@ -149,7 +167,7 @@ function showNotification(message, type = 'info') {
 }
 
 // ============================
-// OTP System Functions
+// OTP System Functions (IMPROVED)
 // ============================
 
 function startOtpTimer() {
@@ -246,28 +264,35 @@ async function handleSendOtp() {
       return;
     }
 
-    // OTP sent successfully
-    APP_STATE.currentEmailPhone = emailPhone;
-    
-    // Switch to OTP verification step
-    $id('signupStep1').style.display = 'none';
-    $id('signupStep2').style.display = 'block';
-    $id('otpSentTo').textContent = maskEmailPhone(emailPhone);
-    
-    // For development - show OTP in console
-    if (data.debugOtp) {
-      console.log('🔐 Development OTP:', data.debugOtp);
-      showNotification(`OTP for testing: ${data.debugOtp}`, 'info');
-    }
-    
-    // Start OTP timer
-    startOtpTimer();
+    // Check for success flag
+    if (data.success) {
+      // OTP sent successfully
+      APP_STATE.currentEmailPhone = emailPhone;
+      
+      // Switch to OTP verification step
+      $id('signupStep1').style.display = 'none';
+      $id('signupStep2').style.display = 'block';
+      $id('otpSentTo').textContent = maskEmailPhone(emailPhone);
+      
+      // For development - show OTP in console
+      if (data.debugOtp) {
+        console.log('🔐 Development OTP:', data.debugOtp);
+        showNotification(`OTP for testing: ${data.debugOtp}`, 'info');
+      }
+      
+      // Start OTP timer
+      startOtpTimer();
 
-    if (regError) regError.textContent = '';
+      if (regError) regError.textContent = '';
+      showNotification('Verification code sent successfully!', 'success');
+    } else {
+      if (regError) regError.textContent = data.error || 'Failed to send verification code';
+    }
 
   } catch (error) {
     console.error('Send OTP error:', error);
-    if (regError) regError.textContent = 'Failed to send verification code';
+    if (regError) regError.textContent = 'Network error. Please check your connection.';
+    showNotification('Network error. Please try again.', 'error');
   } finally {
     const sendOtpBtn = $id('sendOtpBtn');
     if (sendOtpBtn) {
@@ -315,23 +340,29 @@ async function handleVerifyOtp() {
       return;
     }
 
-    // OTP verified and account created
-    if (otpError) {
-      otpError.textContent = 'Account created successfully!';
-      otpError.className = 'success-message';
+    // Check for success flag
+    if (data.success) {
+      // OTP verified and account created
+      if (otpError) {
+        otpError.textContent = 'Account created successfully!';
+        otpError.className = 'success-message';
+      }
+
+      showNotification('Account created successfully!', 'success');
+
+      // Auto login
+      setTimeout(() => {
+        localStorage.setItem('kryptoconnect_current_user', username);
+        window.location.href = '/';
+      }, 1500);
+    } else {
+      if (otpError) otpError.textContent = data.error || 'Verification failed';
     }
-
-    showNotification('Account created successfully!', 'success');
-
-    // Auto login
-    setTimeout(() => {
-      localStorage.setItem('kryptoconnect_current_user', username);
-      window.location.reload();
-    }, 1500);
 
   } catch (error) {
     console.error('Verify OTP error:', error);
-    if (otpError) otpError.textContent = 'Verification failed. Please try again.';
+    if (otpError) otpError.textContent = 'Network error. Please try again.';
+    showNotification('Network error during verification', 'error');
   } finally {
     const verifyBtn = $id('verifyOtpBtn');
     if (verifyBtn) {
@@ -367,18 +398,23 @@ async function handleResendOtp() {
       return;
     }
 
-    // For development
-    if (data.debugOtp) {
-      console.log('🔐 New OTP:', data.debugOtp);
-      showNotification(`New OTP: ${data.debugOtp}`, 'info');
-    }
+    // Check for success flag
+    if (data.success) {
+      // For development
+      if (data.debugOtp) {
+        console.log('🔐 New OTP:', data.debugOtp);
+        showNotification(`New OTP: ${data.debugOtp}`, 'info');
+      }
 
-    showNotification('Verification code sent!', 'success');
-    startOtpTimer();
+      showNotification('Verification code sent!', 'success');
+      startOtpTimer();
+    } else {
+      showNotification(data.error || 'Failed to resend code', 'error');
+    }
 
   } catch (error) {
     console.error('Resend OTP error:', error);
-    showNotification('Failed to resend code', 'error');
+    showNotification('Network error. Please try again.', 'error');
   } finally {
     const resendBtn = $id('resendOtpBtn');
     if (resendBtn) {
@@ -389,7 +425,7 @@ async function handleResendOtp() {
 }
 
 // ============================
-// Authentication Functions
+// Authentication Functions (IMPROVED)
 // ============================
 
 async function handleLogin() {
@@ -424,28 +460,34 @@ async function handleLogin() {
       return;
     }
 
-    // Login successful
-    if (loginError) loginError.textContent = '';
-    
-    APP_STATE.currentUser = username;
-    localStorage.setItem('kryptoconnect_current_user', username);
+    // Check for success flag
+    if (data.success) {
+      // Login successful
+      if (loginError) loginError.textContent = '';
+      
+      APP_STATE.currentUser = username;
+      localStorage.setItem('kryptoconnect_current_user', username);
 
-    // Update socket authentication
-    socket.auth.username = username;
-    socket.disconnect().connect();
+      // Update socket authentication
+      socket.auth.username = username;
+      socket.disconnect().connect();
 
-    showNotification('Login successful!', 'success');
+      showNotification('Login successful!', 'success');
 
-    // Redirect or reload based on page
-    if (isLogin || isSignup) {
-      window.location.href = '/';
+      // Redirect or reload based on page
+      if (isLogin || isSignup) {
+        window.location.href = '/';
+      } else {
+        initializeChat();
+      }
     } else {
-      initializeChat();
+      if (loginError) loginError.textContent = data.error || 'Login failed';
     }
 
   } catch (error) {
     console.error('Login error:', error);
-    if (loginError) loginError.textContent = 'Login failed. Please try again.';
+    if (loginError) loginError.textContent = 'Network error. Please try again.';
+    showNotification('Network error during login', 'error');
   } finally {
     const loginBtn = $id('loginBtn');
     if (loginBtn) {
@@ -503,27 +545,33 @@ async function handleRegister() {
       return;
     }
 
-    if (regError) {
-      regError.textContent = 'Registration successful! Please login.';
-      regError.className = 'success-message';
-    }
-
-    showNotification('Registration successful!', 'success');
-
-    // Switch to login form
-    setTimeout(() => {
-      if ($id('registerForm')) $id('registerForm').style.display = 'none';
-      if ($id('loginForm')) $id('loginForm').style.display = 'block';
-      if ($id('loginUsername')) $id('loginUsername').value = username;
+    // Check for success flag
+    if (data.success) {
       if (regError) {
-        regError.textContent = '';
-        regError.className = 'error-message';
+        regError.textContent = 'Registration successful! Please login.';
+        regError.className = 'success-message';
       }
-    }, 2000);
+
+      showNotification('Registration successful!', 'success');
+
+      // Switch to login form
+      setTimeout(() => {
+        if ($id('registerForm')) $id('registerForm').style.display = 'none';
+        if ($id('loginForm')) $id('loginForm').style.display = 'block';
+        if ($id('loginUsername')) $id('loginUsername').value = username;
+        if (regError) {
+          regError.textContent = '';
+          regError.className = 'error-message';
+        }
+      }, 2000);
+    } else {
+      if (regError) regError.textContent = data.error || 'Registration failed';
+    }
 
   } catch (error) {
     console.error('Registration error:', error);
-    if (regError) regError.textContent = 'Registration failed. Please try again.';
+    if (regError) regError.textContent = 'Network error. Please try again.';
+    showNotification('Network error during registration', 'error');
   } finally {
     const registerBtn = $id('registerBtn');
     if (registerBtn) {
@@ -535,33 +583,41 @@ async function handleRegister() {
 
 function handleLogout() {
   fetch('/api/logout', { method: 'POST' })
-    .then(() => {
-      APP_STATE.currentUser = null;
-      APP_STATE.currentChatWith = null;
-      localStorage.removeItem('kryptoconnect_current_user');
-      
-      socket.auth.username = '';
-      socket.disconnect();
-      
-      showNotification('Logged out successfully', 'info');
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        APP_STATE.currentUser = null;
+        APP_STATE.currentChatWith = null;
+        localStorage.removeItem('kryptoconnect_current_user');
+        
+        socket.auth.username = '';
+        socket.disconnect();
+        
+        showNotification('Logged out successfully', 'info');
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        showNotification('Logout failed', 'error');
+      }
     })
     .catch(error => {
       console.error('Logout error:', error);
-      showNotification('Logout failed', 'error');
+      showNotification('Network error during logout', 'error');
     });
 }
 
 // ============================
-// Chat System Functions
+// Chat System Functions (IMPROVED)
 // ============================
 
 async function loadAllUsers() {
   try {
     const response = await fetch('/api/users');
+    if (!response.ok) {
+      throw new Error('Failed to load users');
+    }
     APP_STATE.allUsers = await response.json();
     renderUsersList();
   } catch (error) {
@@ -696,6 +752,11 @@ function loadFriendsList() {
 }
 
 function startChatWith(username) {
+  if (!username || !APP_STATE.currentUser) {
+    showNotification('Please login to start chatting', 'error');
+    return;
+  }
+
   APP_STATE.currentChatWith = username;
   
   if ($id('chatWithName')) $id('chatWithName').textContent = username;
@@ -794,7 +855,17 @@ function sendMessage() {
   if (!messageInput) return;
   
   const text = messageInput.value.trim();
-  if (!text || !APP_STATE.currentChatWith) return;
+  if (!text || !APP_STATE.currentChatWith) {
+    if (!APP_STATE.currentChatWith) {
+      showNotification('Please select a friend to chat with', 'error');
+    }
+    return;
+  }
+
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
 
   const timestamp = Date.now();
   const time = formatTime(timestamp);
@@ -829,7 +900,7 @@ function sendMessage() {
 }
 
 const debouncedTyping = debounce(() => {
-  if (!APP_STATE.currentChatWith) return;
+  if (!APP_STATE.currentChatWith || !APP_STATE.socketConnected) return;
   
   if (!APP_STATE.isTyping) {
     APP_STATE.isTyping = true;
@@ -841,7 +912,7 @@ const debouncedTyping = debounce(() => {
 }, 300);
 
 function handleTyping() {
-  if (!APP_STATE.currentChatWith) return;
+  if (!APP_STATE.currentChatWith || !APP_STATE.socketConnected) return;
   
   debouncedTyping();
   
@@ -856,7 +927,7 @@ function handleTyping() {
 }
 
 // ============================
-// File Upload Functions
+// File Upload Functions (IMPROVED)
 // ============================
 
 function toggleFileUpload() {
@@ -959,6 +1030,11 @@ async function uploadFile() {
     return;
   }
 
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
   const uploadBtn = $id('uploadBtn');
   if (!uploadBtn) return;
   
@@ -982,25 +1058,31 @@ async function uploadFile() {
     }
 
     const fileData = await response.json();
-    fileData.from = APP_STATE.currentUser;
-    fileData.to = APP_STATE.currentChatWith;
-    fileData.timestamp = Date.now();
+    
+    // Check for success flag
+    if (fileData.success) {
+      fileData.from = APP_STATE.currentUser;
+      fileData.to = APP_STATE.currentChatWith;
+      fileData.timestamp = Date.now();
 
-    socket.emit('fileUpload', fileData);
+      socket.emit('fileUpload', fileData);
 
-    addFileMessageToChat(fileData, true);
+      addFileMessageToChat(fileData, true);
 
-    saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
-      sender: APP_STATE.currentUser,
-      text: `[FILE] ${APP_STATE.selectedFile.name}`,
-      time: formatTime(fileData.timestamp),
-      timestamp: fileData.timestamp,
-      isFile: true,
-      fileData: fileData
-    });
+      saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
+        sender: APP_STATE.currentUser,
+        text: `[FILE] ${APP_STATE.selectedFile.name}`,
+        time: formatTime(fileData.timestamp),
+        timestamp: fileData.timestamp,
+        isFile: true,
+        fileData: fileData
+      });
 
-    showNotification(`File "${APP_STATE.selectedFile.name}" uploaded successfully`, 'success');
-    clearFileSelection();
+      showNotification(`File "${APP_STATE.selectedFile.name}" uploaded successfully`, 'success');
+      clearFileSelection();
+    } else {
+      throw new Error(fileData.error || 'Upload failed');
+    }
 
   } catch (error) {
     console.error('Upload error:', error);
@@ -1071,7 +1153,7 @@ function addFileMessageToChat(fileData, isSender) {
 }
 
 // ============================
-// Friend System Functions
+// Friend System Functions (IMPROVED)
 // ============================
 
 function sendFriendRequestHandler() {
@@ -1102,6 +1184,11 @@ function sendFriendRequestHandler() {
     return;
   }
 
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
   socket.emit('friendRequest', { 
     from: APP_STATE.currentUser, 
     to: username 
@@ -1113,6 +1200,11 @@ function sendFriendRequestHandler() {
 }
 
 function sendFriendRequest(fromUser, toUser) {
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
   socket.emit('friendRequest', { 
     from: fromUser, 
     to: toUser 
@@ -1124,6 +1216,11 @@ function sendFriendRequest(fromUser, toUser) {
 
 // Global functions for friend requests
 window.acceptFriendRequest = function(fromUser) {
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
   socket.emit('acceptFriendRequest', { 
     from: fromUser, 
     to: APP_STATE.currentUser 
@@ -1148,6 +1245,11 @@ window.acceptFriendRequest = function(fromUser) {
 };
 
 window.rejectFriendRequest = function(fromUser) {
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
   socket.emit('rejectFriendRequest', { 
     from: fromUser, 
     to: APP_STATE.currentUser 
@@ -1177,7 +1279,7 @@ function clearChat() {
 }
 
 // ============================
-// UI Helper Functions
+// UI Helper Functions (IMPROVED)
 // ============================
 
 function showFriendRequestNotification(fromUser) {
@@ -1329,11 +1431,13 @@ function clearChatHistory(user1, user2) {
 }
 
 // ============================
-// Socket Event Handlers
+// Socket Event Handlers (ENHANCED)
 // ============================
 
 socket.on('connect', () => {
   console.log('✅ Connected to server with ID:', socket.id);
+  APP_STATE.socketConnected = true;
+  showNotification('Connected to chat server', 'success');
   
   if (APP_STATE.currentUser) {
     socket.emit('userLogin', APP_STATE.currentUser);
@@ -1343,6 +1447,35 @@ socket.on('connect', () => {
 
 socket.on('disconnect', () => {
   console.log('❌ Disconnected from server');
+  APP_STATE.socketConnected = false;
+  showNotification('Disconnected from server', 'error');
+});
+
+socket.on('connect_error', (error) => {
+  console.error('Socket connection error:', error);
+  APP_STATE.socketConnected = false;
+  showNotification('Connection failed. Trying to reconnect...', 'error');
+});
+
+socket.on('reconnect_attempt', () => {
+  console.log('🔄 Attempting to reconnect...');
+});
+
+socket.on('reconnect', () => {
+  console.log('✅ Reconnected to server');
+  APP_STATE.socketConnected = true;
+  showNotification('Reconnected to chat server', 'success');
+});
+
+socket.on('onlineUsers', (users) => {
+  console.log('Online users:', users);
+  users.forEach(username => {
+    if (username !== APP_STATE.currentUser) {
+      APP_STATE.onlineUsers.set(username, true);
+    }
+  });
+  loadFriendsList();
+  renderUsersList();
 });
 
 socket.on('userOnline', (username) => {
@@ -1437,6 +1570,11 @@ socket.on('fileUploadError', (data) => {
 
 socket.on('pendingRequests', (requests) => {
   APP_STATE.pendingRequests = requests;
+});
+
+socket.on('error', (data) => {
+  console.error('Socket error:', data);
+  showNotification(data.message || 'An error occurred', 'error');
 });
 
 // ============================
@@ -1609,4 +1747,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   console.log('🚀 KryptoConnect Client Initialized');
+  console.log('📍 User:', APP_STATE.currentUser || 'Not logged in');
+  console.log('📍 Socket Connected:', APP_STATE.socketConnected);
 });
