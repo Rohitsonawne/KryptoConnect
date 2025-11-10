@@ -14,15 +14,15 @@
   <meta property="og:title" content="KryptoConnect - Secure Crypto Chat">
   <meta property="og:description" content="Secure, encrypted real-time chat application with OTP verification">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://kryptoconnect.com">
+  <meta property="og:url" content="https://kryptoconnect-1-k68h.onrender.com">
   
   <!-- Security Headers -->
   <meta http-equiv="Content-Security-Policy" 
         content="default-src 'self'; 
-                 script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
+                 script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.googletagmanager.com; 
                  style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
                  img-src 'self' data: https:; 
-                 connect-src 'self' ws: wss:;">
+                 connect-src 'self' ws: wss: https://www.google-analytics.com;">
   
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
@@ -33,7 +33,7 @@
         crossorigin="anonymous" referrerpolicy="no-referrer" />
 
   <!-- CSS -->
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="styles.css" />
 
   <!-- Socket.io Client -->
   <script src="/socket.io/socket.io.js"></script>
@@ -57,35 +57,49 @@
           <p class="subtitle">Log in to continue chatting securely</p>
 
           <div class="form-group">
-            <label for="loginUsername">Username</label>
-            <input type="text" id="loginUsername" placeholder="Enter your username" 
-                   aria-required="true" autocomplete="username" />
+            <label for="loginUsername">
+              <i class="fas fa-user" aria-hidden="true"></i>
+              Username
+            </label>
+            <div class="input-wrapper">
+              <i class="fas fa-user" aria-hidden="true"></i>
+              <input type="text" id="loginUsername" placeholder="Enter your username" 
+                     aria-required="true" autocomplete="username" class="enhanced-focus" />
+            </div>
           </div>
           
           <div class="form-group">
-            <label for="loginPassword">Password</label>
-            <input type="password" id="loginPassword" placeholder="Enter your password" 
-                   aria-required="true" autocomplete="current-password" />
+            <label for="loginPassword">
+              <i class="fas fa-lock" aria-hidden="true"></i>
+              Password
+            </label>
+            <div class="input-wrapper">
+              <i class="fas fa-lock" aria-hidden="true"></i>
+              <input type="password" id="loginPassword" placeholder="Enter your password" 
+                     aria-required="true" autocomplete="current-password" class="enhanced-focus" />
+            </div>
           </div>
 
-          <button class="btn" id="loginBtn" type="submit">
+          <button class="btn enhanced-hover" id="loginBtn" type="submit">
             <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Login
           </button>
           
           <div class="error-message" id="loginError" role="alert" aria-live="polite"></div>
 
           <div class="auth-links">
-            <a href="forgot.html" aria-label="Forgot password">Forgot password?</a>
+            <a href="#" id="showForgotPassword" aria-label="Forgot password">
+              <i class="fas fa-question-circle" aria-hidden="true"></i> Forgot password?
+            </a>
           </div>
 
           <div class="divider" aria-hidden="true">or continue with</div>
           
           <div class="social-login">
-            <button type="button" class="social-btn google" onclick="window.location.href='/auth/google'" 
+            <button type="button" class="social-btn google enhanced-hover" onclick="window.location.href='/auth/google'" 
                     aria-label="Sign in with Google">
               <i class="fab fa-google" aria-hidden="true"></i> Google
             </button>
-            <button type="button" class="social-btn facebook" onclick="window.location.href='/auth/facebook'" 
+            <button type="button" class="social-btn facebook enhanced-hover" onclick="window.location.href='/auth/facebook'" 
                     aria-label="Sign in with Facebook">
               <i class="fab fa-facebook-f" aria-hidden="true"></i> Facebook
             </button>
@@ -97,6 +111,115 @@
           </div>
         </div>
 
+        <!-- FORGOT PASSWORD FORM -->
+        <div class="auth-form forgot-password-form" id="forgotPasswordForm" style="display: none;" role="form" aria-labelledby="forgotPasswordHeading">
+          <h2 id="forgotPasswordHeading">Reset Password</h2>
+          <p class="subtitle">Enter your email or phone to reset your password</p>
+
+          <div class="password-reset-steps">
+            <div class="step active">
+              <div class="step-number">1</div>
+              <span>Enter your email/phone</span>
+            </div>
+            <div class="step">
+              <div class="step-number">2</div>
+              <span>Verify with OTP</span>
+            </div>
+            <div class="step">
+              <div class="step-number">3</div>
+              <span>Set new password</span>
+            </div>
+          </div>
+
+          <div id="forgotPasswordStep1">
+            <div class="form-group">
+              <label for="forgotEmailPhone">
+                <i class="fas fa-envelope" aria-hidden="true"></i>
+                Email or Phone Number
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-envelope" aria-hidden="true"></i>
+                <input type="text" id="forgotEmailPhone" placeholder="Enter your email or phone" 
+                       aria-required="true" autocomplete="email" class="enhanced-focus" />
+              </div>
+              <small class="input-hint">We'll send a verification code to reset your password</small>
+            </div>
+
+            <button class="btn enhanced-hover" id="sendForgotOtpBtn" type="button">
+              <i class="fas fa-shield-alt" aria-hidden="true"></i> Send Reset Code
+            </button>
+          </div>
+
+          <div id="forgotPasswordStep2" style="display: none;">
+            <div class="form-group">
+              <label for="forgotOtp">Verification Code</label>
+              <input type="text" id="forgotOtp" placeholder="Enter 6-digit code" 
+                     aria-required="true" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" 
+                     class="enhanced-focus" />
+              <small class="input-hint">
+                Code sent to <span id="forgotOtpSentTo" style="font-weight: bold;">email/phone</span>
+              </small>
+            </div>
+
+            <div class="otp-timer" role="timer" aria-live="polite">
+              <i class="fas fa-clock" aria-hidden="true"></i>
+              <span id="forgotOtpTimer">02:00</span>
+            </div>
+
+            <button class="btn enhanced-hover" id="verifyForgotOtpBtn" type="button">
+              <i class="fas fa-check-circle" aria-hidden="true"></i> Verify Code
+            </button>
+            
+            <button class="btn-secondary" id="resendForgotOtpBtn" type="button" disabled>
+              <i class="fas fa-redo" aria-hidden="true"></i> Resend Code
+            </button>
+          </div>
+
+          <div id="forgotPasswordStep3" style="display: none;">
+            <div class="form-group">
+              <label for="newPassword">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                New Password
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                <input type="password" id="newPassword" placeholder="Enter new password" 
+                       aria-required="true" autocomplete="new-password" minlength="6" class="enhanced-focus" />
+              </div>
+              <div class="password-strength">
+                <div class="strength-bar">
+                  <div class="strength-fill" id="passwordStrengthBar"></div>
+                </div>
+                <div class="strength-text" id="passwordStrengthText">Password strength</div>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="confirmNewPassword">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                Confirm New Password
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                <input type="password" id="confirmNewPassword" placeholder="Confirm new password" 
+                       aria-required="true" autocomplete="new-password" class="enhanced-focus" />
+              </div>
+            </div>
+
+            <button class="btn enhanced-hover" id="resetPasswordBtn" type="button">
+              <i class="fas fa-sync-alt" aria-hidden="true"></i> Reset Password
+            </button>
+          </div>
+          
+          <div class="error-message" id="forgotError" role="alert" aria-live="polite"></div>
+          <div class="success-message" id="forgotSuccess" role="alert" aria-live="polite" style="display: none;"></div>
+
+          <div class="auth-toggle">
+            Remember your password? 
+            <span id="showLoginFromForgot" role="button" tabindex="0" aria-label="Back to login">Back to Login</span>
+          </div>
+        </div>
+
         <!-- SIGN UP FORM WITH OTP VERIFICATION -->
         <div class="auth-form" id="registerForm" style="display: none;" role="form" aria-labelledby="registerHeading">
           <h2 id="registerHeading">Create Account</h2>
@@ -105,33 +228,62 @@
           <!-- Step 1: Basic Information -->
           <div id="signupStep1">
             <div class="form-group">
-              <label for="regUsername">Username</label>
-              <input type="text" id="regUsername" placeholder="Choose a username" 
-                     aria-required="true" autocomplete="username" minlength="3" maxlength="30" />
+              <label for="regUsername">
+                <i class="fas fa-user" aria-hidden="true"></i>
+                Username
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-user" aria-hidden="true"></i>
+                <input type="text" id="regUsername" placeholder="Choose a username" 
+                       aria-required="true" autocomplete="username" minlength="3" maxlength="30" class="enhanced-focus" />
+              </div>
               <small class="input-hint">3-30 characters, letters and numbers only</small>
             </div>
 
             <div class="form-group">
-              <label for="regEmailPhone">Email or Phone Number</label>
-              <input type="text" id="regEmailPhone" placeholder="Enter email or phone" 
-                     aria-required="true" autocomplete="email" />
+              <label for="regEmailPhone">
+                <i class="fas fa-envelope" aria-hidden="true"></i>
+                Email or Phone Number
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-envelope" aria-hidden="true"></i>
+                <input type="text" id="regEmailPhone" placeholder="Enter email or phone" 
+                       aria-required="true" autocomplete="email" class="enhanced-focus" />
+              </div>
               <small class="input-hint">We'll send a verification code for security</small>
             </div>
 
             <div class="form-group">
-              <label for="regPassword">Password</label>
-              <input type="password" id="regPassword" placeholder="Create a password" 
-                     aria-required="true" autocomplete="new-password" minlength="6" />
-              <small class="input-hint">Minimum 6 characters</small>
+              <label for="regPassword">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                Password
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                <input type="password" id="regPassword" placeholder="Create a password" 
+                       aria-required="true" autocomplete="new-password" minlength="6" class="enhanced-focus" />
+              </div>
+              <div class="password-strength">
+                <div class="strength-bar">
+                  <div class="strength-fill" id="regPasswordStrengthBar"></div>
+                </div>
+                <div class="strength-text" id="regPasswordStrengthText">Password strength</div>
+              </div>
             </div>
             
             <div class="form-group">
-              <label for="regConfirmPassword">Confirm Password</label>
-              <input type="password" id="regConfirmPassword" placeholder="Confirm your password" 
-                     aria-required="true" autocomplete="new-password" />
+              <label for="regConfirmPassword">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                Confirm Password
+              </label>
+              <div class="input-wrapper">
+                <i class="fas fa-lock" aria-hidden="true"></i>
+                <input type="password" id="regConfirmPassword" placeholder="Confirm your password" 
+                       aria-required="true" autocomplete="new-password" class="enhanced-focus" />
+              </div>
             </div>
 
-            <button class="btn" id="sendOtpBtn" type="button">
+            <button class="btn enhanced-hover" id="sendOtpBtn" type="button">
               <i class="fas fa-shield-alt" aria-hidden="true"></i> Send Verification Code
             </button>
             
@@ -148,7 +300,7 @@
               <label for="regOtp">Verification Code</label>
               <input type="text" id="regOtp" placeholder="Enter 6-digit code" 
                      aria-required="true" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" 
-                     aria-describedby="otpHelp" />
+                     aria-describedby="otpHelp" class="enhanced-focus" />
               <small id="otpHelp" class="input-hint">
                 Code sent to <span id="otpSentTo" style="font-weight: bold;">email/phone</span>
               </small>
@@ -159,7 +311,7 @@
               <span id="otpTimer">02:00</span>
             </div>
 
-            <button class="btn" id="verifyOtpBtn" type="button">
+            <button class="btn enhanced-hover" id="verifyOtpBtn" type="button">
               <i class="fas fa-check-circle" aria-hidden="true"></i> Verify & Create Account
             </button>
             
@@ -173,11 +325,11 @@
           <div class="divider" aria-hidden="true">or sign up with</div>
           
           <div class="social-login">
-            <button type="button" class="social-btn google" onclick="window.location.href='/auth/google'" 
+            <button type="button" class="social-btn google enhanced-hover" onclick="window.location.href='/auth/google'" 
                     aria-label="Sign up with Google">
               <i class="fab fa-google" aria-hidden="true"></i> Google
             </button>
-            <button type="button" class="social-btn facebook" onclick="window.location.href='/auth/facebook'" 
+            <button type="button" class="social-btn facebook enhanced-hover" onclick="window.location.href='/auth/facebook'" 
                     aria-label="Sign up with Facebook">
               <i class="fab fa-facebook-f" aria-hidden="true"></i> Facebook
             </button>
@@ -198,9 +350,9 @@
             KryptoConnect Chat
           </div>
           <div class="user-info">
-            <div class="user-avatar" id="userAvatar" aria-label="User avatar">U</div>
+            <div class="user-avatar floating" id="userAvatar" aria-label="User avatar">U</div>
             <span id="usernameDisplay" aria-label="Current user">User</span>
-            <button class="logout-btn" id="logoutBtn" aria-label="Logout">
+            <button class="logout-btn enhanced-hover" id="logoutBtn" aria-label="Logout">
               <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Logout
             </button>
           </div>
@@ -213,7 +365,7 @@
               <h3 class="sidebar-title" id="friendsHeading">
                 <i class="fas fa-user-friends" aria-hidden="true"></i>
                 My Friends
-                <button class="add-friend-btn" id="addFriendBtn" 
+                <button class="add-friend-btn enhanced-hover" id="addFriendBtn" 
                         aria-label="Add new friend" title="Add Friend">
                   <i class="fas fa-user-plus" aria-hidden="true"></i>
                 </button>
@@ -240,11 +392,11 @@
             <div class="chat-with-info" id="chatWithInfo" style="display: none;" 
                  aria-labelledby="currentChatHeading">
               <div class="current-chat-user">
-                <div class="user-status" aria-hidden="true"></div>
+                <div class="user-status online pulse" aria-hidden="true"></div>
                 <span id="chatWithName" aria-label="Currently chatting with">User</span>
               </div>
               <div class="chat-actions">
-                <button class="btn-secondary" id="clearChatBtn" 
+                <button class="btn-secondary enhanced-hover" id="clearChatBtn" 
                         aria-label="Clear chat history">
                   <i class="fas fa-trash" aria-hidden="true"></i> Clear Chat
                 </button>
@@ -252,13 +404,13 @@
             </div>
 
             <!-- Messages Container -->
-            <div class="messages-container" id="messagesContainer" 
+            <div class="messages-container custom-scrollbar" id="messagesContainer" 
                  role="log" aria-label="Chat messages" aria-live="polite">
               
               <!-- Initial State - No Chat Selected -->
               <div class="no-chat-selected" id="noChatSelected" aria-live="polite">
                 <div>
-                  <i class="fas fa-comments" aria-hidden="true"></i>
+                  <i class="fas fa-comments floating" aria-hidden="true"></i>
                   <h3>Welcome to KryptoConnect!</h3>
                   <p>Select a friend from your list to start chatting or add new friends using the + button.</p>
                 </div>
@@ -267,7 +419,14 @@
 
             <!-- Typing Indicator -->
             <div class="typing-indicator" id="typingIndicator" 
-                 role="status" aria-live="polite" aria-atomic="true"></div>
+                 role="status" aria-live="polite" aria-atomic="true" style="display: none;">
+              <span id="typingUser"></span> is typing
+              <div class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
 
             <!-- Message Input & File Upload Area -->
             <div class="message-input-container" role="form" aria-labelledby="messageInputLabel">
@@ -276,10 +435,10 @@
               <div class="file-upload-container" id="fileUploadContainer" style="display: none;"
                    aria-label="File upload options">
                 <div class="file-input-wrapper">
-                  <input type="file" class="file-input" id="fileInput" 
+                  <input type="file" class="file-input enhanced-focus" id="fileInput" 
                          accept="*/*" aria-label="Select file to upload" />
                 </div>
-                <button class="upload-btn" id="uploadBtn" disabled
+                <button class="upload-btn enhanced-hover" id="uploadBtn" disabled
                         aria-label="Upload selected file">
                   <i class="fas fa-upload" aria-hidden="true"></i> Upload
                 </button>
@@ -294,7 +453,7 @@
                     <div class="file-name" id="filePreviewName">filename.ext</div>
                     <div class="file-size" id="filePreviewSize">0 MB</div>
                   </div>
-                  <button class="file-remove" id="fileRemoveBtn" 
+                  <button class="file-remove enhanced-hover" id="fileRemoveBtn" 
                           aria-label="Remove selected file">
                     <i class="fas fa-times" aria-hidden="true"></i>
                   </button>
@@ -308,24 +467,32 @@
               </div>
 
               <!-- Upload Information -->
-              <div class="upload-info" id="uploadInfo" aria-live="polite">
+              <div class="upload-info" id="uploadInfo" aria-live="polite" style="display: none;">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
                 Maximum file size: 100MB • Supported: Images, Videos, Documents
               </div>
 
               <!-- Message Input Row -->
               <div class="message-input-row">
-                <button class="btn-secondary" id="attachFileBtn" 
+                <button class="btn-secondary enhanced-hover" id="attachFileBtn" 
                         aria-label="Attach file" title="Attach File">
                   <i class="fas fa-paperclip" aria-hidden="true"></i>
                 </button>
                 
-                <input type="text" class="message-input" id="messageInput" 
-                       placeholder="Select a friend to start chatting..." 
-                       disabled aria-label="Type your message" 
-                       aria-describedby="messageInputLabel" />
+                <div class="message-input-wrapper">
+                  <input type="text" class="message-input enhanced-focus" id="messageInput" 
+                         placeholder="Select a friend to start chatting..." 
+                         disabled aria-label="Type your message" 
+                         aria-describedby="messageInputLabel" />
+                  <div class="input-actions">
+                    <button class="attach-btn enhanced-hover" id="emojiBtn" 
+                            aria-label="Insert emoji" title="Emoji" style="display: none;">
+                      <i class="fas fa-smile" aria-hidden="true"></i>
+                    </button>
+                  </div>
+                </div>
                 
-                <button class="send-btn" id="sendBtn" disabled
+                <button class="send-btn enhanced-hover" id="sendBtn" disabled
                         aria-label="Send message">
                   <i class="fas fa-paper-plane" aria-hidden="true"></i>
                 </button>
@@ -340,7 +507,7 @@
     <section class="features" aria-labelledby="featuresHeading">
       <h2 id="featuresHeading" class="sr-only">Key Features</h2>
       
-      <div class="feature-card" role="article" aria-labelledby="feature1Heading">
+      <div class="feature-card enhanced-hover" role="article" aria-labelledby="feature1Heading">
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-lock"></i>
         </div>
@@ -348,7 +515,7 @@
         <p>Your messages are secured with military-grade encryption. Only you and the recipient can read them.</p>
       </div>
 
-      <div class="feature-card" role="article" aria-labelledby="feature2Heading">
+      <div class="feature-card enhanced-hover" role="article" aria-labelledby="feature2Heading">
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-user-friends"></i>
         </div>
@@ -356,7 +523,7 @@
         <p>Add friends to your network and chat privately with ease. Manage your connections securely.</p>
       </div>
 
-      <div class="feature-card" role="article" aria-labelledby="feature3Heading">
+      <div class="feature-card enhanced-hover" role="article" aria-labelledby="feature3Heading">
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-bolt"></i>
         </div>
@@ -364,7 +531,7 @@
         <p>Experience lightning-fast, live conversations with real-time messaging and typing indicators.</p>
       </div>
 
-      <div class="feature-card" role="article" aria-labelledby="feature4Heading">
+      <div class="feature-card enhanced-hover" role="article" aria-labelledby="feature4Heading">
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-shield-alt"></i>
         </div>
@@ -372,7 +539,7 @@
         <p>Secure account creation with email/phone verification. Your security is our priority.</p>
       </div>
 
-      <div class="feature-card" role="article" aria-labelledby="feature5Heading">
+      <div class="feature-card enhanced-hover" role="article" aria-labelledby="feature5Heading">
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-file-upload"></i>
         </div>
@@ -380,7 +547,7 @@
         <p>Share images, documents, and files up to 100MB with end-to-end encryption.</p>
       </div>
 
-      <div class="feature-card" role="article" aria-labelledby="feature6Heading">
+      <div class="feature-card enhanced-hover" role="article" aria-labelledby="feature6Heading">
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-mobile-alt"></i>
         </div>
@@ -398,18 +565,25 @@
             <i class="fas fa-user-plus" aria-hidden="true"></i>
             Add Friend
           </h3>
-          <button class="close-modal" id="closeModal" aria-label="Close modal">
+          <button class="close-modal enhanced-hover" id="closeModal" aria-label="Close modal">
             <i class="fas fa-times" aria-hidden="true"></i>
           </button>
         </div>
         
         <div class="form-group">
-          <label for="friendUsername">Username</label>
-          <input type="text" id="friendUsername" placeholder="Enter username to add" 
-                 aria-required="true" />
+          <label for="friendUsername">
+            <i class="fas fa-at" aria-hidden="true"></i>
+            Username
+          </label>
+          <div class="input-wrapper">
+            <i class="fas fa-at" aria-hidden="true"></i>
+            <input type="text" id="friendUsername" placeholder="Enter username to add" 
+                   aria-required="true" class="enhanced-focus" />
+          </div>
+          <small class="input-hint">Enter the exact username of the person you want to add</small>
         </div>
         
-        <button class="btn" id="sendFriendRequestBtn">
+        <button class="btn enhanced-hover" id="sendFriendRequestBtn">
           <i class="fas fa-paper-plane" aria-hidden="true"></i> Send Request
         </button>
         
