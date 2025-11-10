@@ -37,7 +37,7 @@ const io = new Server(server, {
     credentials: true
   }
 });
-
+app.set('trust proxy', 1);
 // Security Middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for development
