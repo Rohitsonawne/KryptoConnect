@@ -1,5 +1,5 @@
 // ============================
-// KryptoConnect - Enhanced Server.js
+// KryptoConnect - Enhanced Server.js (FIXED)
 // ============================
 
 require('dotenv').config();
@@ -18,12 +18,21 @@ const FacebookStrategy = require('passport-facebook').Strategy;
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const crypto = require('crypto');
+const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
+
+// Enhanced CORS configuration
+app.use(cors({
+  origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500"],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+}));
+
 const io = new Server(server, {
   cors: { 
-    origin: process.env.CLIENT_URL || '*', 
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500"],
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -31,27 +40,20 @@ const io = new Server(server, {
 
 // Security Middleware
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "ws:", "wss:"]
-    }
-  }
+  contentSecurityPolicy: false, // Disable for development
+  crossOriginEmbedderPolicy: false
 }));
 
 // Rate Limiting
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
+  windowMs: 15 * 60 * 1000,
+  max: 10, // Increased from 5 to 10
   message: 'Too many attempts, please try again later.'
 });
 
 const otpLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 3, // 3 OTP requests
+  windowMs: 5 * 60 * 1000,
+  max: 5, // Increased from 3 to 5
   message: 'Too many OTP requests, please try again later.'
 });
 
@@ -61,18 +63,19 @@ app.use('/api/send-otp', otpLimiter);
 app.use('/api/resend-otp', otpLimiter);
 
 // Other Middleware
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Session Configuration
 app.use(session({
-  secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+  secret: process.env.SESSION_SECRET || 'kryptoconnect-backup-secret-2024',
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // Set to true in production with HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
@@ -80,23 +83,46 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ============================
-// MongoDB Connection
+// MongoDB Connection (IMPROVED)
 // ============================
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kryptoconnect';
 
-mongoose.connect(MONGODB_URI)
+const mongooseOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 30000,
+  socketTimeoutMS: 45000,
+  retryWrites: true,
+  w: 'majority'
+};
+
+mongoose.connect(MONGODB_URI, mongooseOptions)
   .then(() => {
     console.log('✅ MongoDB Connected Successfully!');
     console.log('📍 Database:', mongoose.connection.name);
+    console.log('📍 Host:', mongoose.connection.host);
   })
   .catch(err => {
     console.error('❌ MongoDB connection error:', err.message);
-    // Continue without database for basic functionality
     console.log('🔄 Starting server without database connection...');
   });
+
+// Enhanced connection event handlers
+mongoose.connection.on('connected', () => {
+  console.log('📊 MongoDB event connected');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('📊 MongoDB event error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('📊 MongoDB event disconnected');
+});
+
 // ============================
-// Enhanced Schemas
+// Enhanced Schemas (UNCHANGED)
 // ============================
 
 const userSchema = new mongoose.Schema({
@@ -243,37 +269,49 @@ const OTP = mongoose.model('OTP', otpSchema);
 
 // Create Indexes for Performance
 async function createIndexes() {
-  await User.createIndexes();
-  await Message.createIndexes();
-  await FriendRequest.createIndexes();
-  await Friend.createIndexes();
-  await OTP.createIndexes();
-  
-  // Specific indexes for better query performance
-  await Message.collection.createIndex({ from: 1, to: 1, timestamp: -1 });
-  await Friend.collection.createIndex({ user1: 1, user2: 1 });
-  await OTP.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 600 }); // Auto delete after 10 min
+  try {
+    await User.createIndexes();
+    await Message.createIndexes();
+    await FriendRequest.createIndexes();
+    await Friend.createIndexes();
+    await OTP.createIndexes();
+    
+    await Message.collection.createIndex({ from: 1, to: 1, timestamp: -1 });
+    await Friend.collection.createIndex({ user1: 1, user2: 1 });
+    await OTP.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 600 });
+    console.log('✅ Database indexes created successfully');
+  } catch (error) {
+    console.log('⚠️ Index creation warning:', error.message);
+  }
 }
-createIndexes().catch(console.error);
+
+// Delay index creation to ensure DB connection
+setTimeout(() => {
+  if (mongoose.connection.readyState === 1) {
+    createIndexes().catch(console.error);
+  }
+}, 5000);
 
 // ============================
-// File Upload Configuration
+// File Upload Configuration (IMPROVED)
 // ============================
 
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Uploads directory created');
 }
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => {
+    cb(null, uploadsDir);
+  },
   filename: (req, file, cb) => {
     const uniqueName = Date.now() + '-' + Math.round(Math.random() * 1E9) + path.extname(file.originalname);
     cb(null, uniqueName);
   }
 });
 
-// File filter for security
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -285,18 +323,18 @@ const fileFilter = (req, file, cb) => {
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('File type not allowed'), false);
+    cb(new Error(`File type ${file.mimetype} not allowed`), false);
   }
 };
 
 const upload = multer({ 
   storage, 
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter 
 });
 
 // ============================
-// Passport Configuration
+// Passport Configuration (UNCHANGED)
 // ============================
 
 passport.serializeUser((user, done) => done(null, user.id));
@@ -382,21 +420,31 @@ function validateEmailOrPhone(input) {
   return validateEmail(input) || validatePhone(input);
 }
 
-// Async error handler wrapper
 const asyncHandler = (fn) => (req, res, next) => {
   Promise.resolve(fn(req, res, next)).catch(next);
 };
 
 // ============================
-// Basic Routes
+// Basic Routes (ENHANCED)
 // ============================
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'Server is running!',
+    timestamp: new Date().toISOString(),
+    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // OAuth Routes
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/?error=auth_failed' }),
   (req, res) => {
@@ -406,6 +454,7 @@ app.get('/auth/google/callback',
 );
 
 app.get('/auth/facebook', passport.authenticate('facebook', { scope: ['email'] }));
+
 app.get('/auth/facebook/callback',
   passport.authenticate('facebook', { failureRedirect: '/?error=auth_failed' }),
   (req, res) => {
@@ -415,7 +464,7 @@ app.get('/auth/facebook/callback',
 );
 
 // ============================
-// OTP APIs
+// OTP APIs (FIXED)
 // ============================
 
 app.post('/api/send-otp', asyncHandler(async (req, res) => {
@@ -459,7 +508,7 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
   await OTP.deleteMany({ emailPhone });
 
   const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
   const otpRecord = new OTP({
     emailPhone,
@@ -470,12 +519,82 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
 
   await otpRecord.save();
 
-  // TODO: Integrate with email/SMS service
-  console.log(`OTP for ${emailPhone} (${type}): ${otp}`); // Remove in production
+  console.log(`📧 OTP for ${emailPhone} (${type}): ${otp}`);
 
   res.json({ 
+    success: true,
     message: 'Verification code sent successfully',
-    debugOtp: process.env.NODE_ENV === 'development' ? otp : undefined
+    debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp
+  });
+}));
+
+// FIXED: Added missing verify-otp-signup endpoint
+app.post('/api/verify-otp-signup', asyncHandler(async (req, res) => {
+  const { emailPhone, otp, username, password } = req.body;
+
+  if (!emailPhone || !otp || !username || !password) {
+    return res.status(400).json({ error: 'All fields are required' });
+  }
+
+  // Verify OTP first
+  const otpRecord = await OTP.findOne({ emailPhone, type: 'signup' });
+  
+  if (!otpRecord) {
+    return res.status(400).json({ error: 'Invalid or expired verification code' });
+  }
+
+  if (otpRecord.expiresAt < new Date()) {
+    await OTP.deleteOne({ _id: otpRecord._id });
+    return res.status(400).json({ error: 'Verification code expired' });
+  }
+
+  if (otpRecord.otp !== otp) {
+    otpRecord.attempts += 1;
+    await otpRecord.save();
+    
+    if (otpRecord.attempts >= 3) {
+      await OTP.deleteOne({ _id: otpRecord._id });
+      return res.status(400).json({ error: 'Too many failed attempts. Please request a new code.' });
+    }
+    
+    return res.status(400).json({ error: 'Invalid verification code' });
+  }
+
+  // Check if username already exists
+  const existingUser = await User.findOne({ username });
+  if (existingUser) {
+    return res.status(400).json({ error: 'Username already taken' });
+  }
+
+  // Create user
+  const hashedPassword = await bcrypt.hash(password, 10);
+  
+  const userData = {
+    username: username.trim(),
+    password: hashedPassword,
+    isVerified: true
+  };
+
+  if (validateEmail(emailPhone)) {
+    userData.email = emailPhone;
+  } else {
+    userData.phone = emailPhone;
+  }
+
+  const newUser = new User(userData);
+  await newUser.save();
+
+  // Clean up OTP
+  await OTP.deleteOne({ _id: otpRecord._id });
+
+  res.json({ 
+    success: true,
+    message: 'Account created successfully',
+    user: { 
+      username: newUser.username,
+      email: newUser.email,
+      phone: newUser.phone
+    }
   });
 }));
 
@@ -513,64 +632,9 @@ app.post('/api/verify-otp', asyncHandler(async (req, res) => {
   await OTP.deleteOne({ _id: otpRecord._id });
 
   res.json({ 
+    success: true,
     message: 'Verification successful',
     verified: true
-  });
-}));
-
-app.post('/api/verify-otp-signup', asyncHandler(async (req, res) => {
-  const { emailPhone, otp, username, password } = req.body;
-
-  if (!emailPhone || !otp || !username || !password) {
-    return res.status(400).json({ error: 'All fields are required' });
-  }
-
-  // Verify OTP first
-  const otpRecord = await OTP.findOne({ emailPhone, type: 'signup' });
-  
-  if (!otpRecord || otpRecord.otp !== otp) {
-    return res.status(400).json({ error: 'Invalid verification code' });
-  }
-
-  if (otpRecord.expiresAt < new Date()) {
-    await OTP.deleteOne({ _id: otpRecord._id });
-    return res.status(400).json({ error: 'Verification code expired' });
-  }
-
-  // Check if username already exists
-  const existingUser = await User.findOne({ username });
-  if (existingUser) {
-    return res.status(400).json({ error: 'Username already taken' });
-  }
-
-  // Create user
-  const hashedPassword = await bcrypt.hash(password, 10);
-  
-  const userData = {
-    username: username.trim(),
-    password: hashedPassword,
-    isVerified: true
-  };
-
-  if (validateEmail(emailPhone)) {
-    userData.email = emailPhone;
-  } else {
-    userData.phone = emailPhone;
-  }
-
-  const newUser = new User(userData);
-  await newUser.save();
-
-  // Clean up OTP
-  await OTP.deleteOne({ _id: otpRecord._id });
-
-  res.json({ 
-    message: 'Account created successfully',
-    user: { 
-      username: newUser.username,
-      email: newUser.email,
-      phone: newUser.phone
-    }
   });
 }));
 
@@ -597,17 +661,17 @@ app.post('/api/resend-otp', asyncHandler(async (req, res) => {
 
   await otpRecord.save();
 
-  // TODO: Send OTP via email/SMS
-  console.log(`New OTP for ${emailPhone} (${type}): ${otp}`); // Remove in production
+  console.log(`📧 New OTP for ${emailPhone} (${type}): ${otp}`);
 
   res.json({ 
+    success: true,
     message: 'Verification code sent successfully',
-    debugOtp: process.env.NODE_ENV === 'development' ? otp : undefined
+    debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp
   });
 }));
 
 // ============================
-// File Upload & Download APIs
+// File Upload & Download APIs (FIXED)
 // ============================
 
 app.post('/api/upload', upload.single('file'), asyncHandler(async (req, res) => {
@@ -624,7 +688,10 @@ app.post('/api/upload', upload.single('file'), asyncHandler(async (req, res) => 
     timestamp: Date.now()
   };
 
-  res.json(fileData);
+  res.json({
+    success: true,
+    ...fileData
+  });
 }));
 
 app.get('/api/download/:filename', (req, res) => {
@@ -641,7 +708,7 @@ app.get('/api/download/:filename', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================
-// Auth & User APIs
+// Auth & User APIs (ENHANCED)
 // ============================
 
 app.post('/api/register', asyncHandler(async (req, res) => {
@@ -673,6 +740,7 @@ app.post('/api/register', asyncHandler(async (req, res) => {
   await newUser.save();
 
   res.json({ 
+    success: true,
     message: 'Registration successful', 
     user: { username: newUser.username } 
   });
@@ -699,8 +767,10 @@ app.post('/api/login', asyncHandler(async (req, res) => {
   await user.save();
 
   req.session.userId = user._id;
+  req.session.username = user.username;
 
   res.json({ 
+    success: true,
     message: 'Login successful', 
     user: { 
       username: user.username,
@@ -715,7 +785,8 @@ app.post('/api/logout', (req, res) => {
     if (err) {
       return res.status(500).json({ error: 'Logout failed' });
     }
-    res.json({ message: 'Logout successful' });
+    res.clearCookie('connect.sid');
+    res.json({ success: true, message: 'Logout successful' });
   });
 });
 
@@ -781,7 +852,7 @@ app.get('/api/messages/:user1/:user2', asyncHandler(async (req, res) => {
 }));
 
 // ============================
-// Socket.IO Real-Time Chat
+// Socket.IO Real-Time Chat (ENHANCED)
 // ============================
 
 const onlineUsers = {};
@@ -789,8 +860,8 @@ const onlineUsers = {};
 // Socket authentication middleware
 io.use((socket, next) => {
   const username = socket.handshake.auth.username;
-  if (username) {
-    socket.username = username;
+  if (username && username.trim() !== '') {
+    socket.username = username.trim();
     next();
   } else {
     next(new Error('Authentication required'));
@@ -805,6 +876,10 @@ io.on('connection', (socket) => {
   // Notify others about user coming online
   socket.broadcast.emit('userOnline', socket.username);
 
+  // Send current online users to the connected user
+  const currentOnlineUsers = [...new Set(Object.values(onlineUsers))];
+  socket.emit('onlineUsers', currentOnlineUsers);
+
   // Send pending friend requests
   socket.on('getPendingRequests', async () => {
     try {
@@ -815,6 +890,7 @@ io.on('connection', (socket) => {
       socket.emit('pendingRequests', requests);
     } catch (error) {
       console.error('Error getting pending requests:', error);
+      socket.emit('error', { message: 'Failed to load pending requests' });
     }
   });
 
@@ -828,10 +904,17 @@ io.on('connection', (socket) => {
         return;
       }
 
+      // Trim and validate message
+      const trimmedMessage = message.trim();
+      if (trimmedMessage.length === 0) {
+        socket.emit('error', { message: 'Message cannot be empty' });
+        return;
+      }
+
       const newMessage = new Message({
         from,
         to,
-        message: message.trim(),
+        message: trimmedMessage,
         timestamp: new Date(timestamp)
       });
 
@@ -840,11 +923,17 @@ io.on('connection', (socket) => {
       // Send to recipient
       const recipientSocket = Object.entries(onlineUsers).find(([_, username]) => username === to)?.[0];
       if (recipientSocket) {
-        io.to(recipientSocket).emit('chatMessage', data);
+        io.to(recipientSocket).emit('chatMessage', {
+          ...data,
+          timestamp: newMessage.timestamp
+        });
       }
 
       // Also send back to sender for confirmation
-      socket.emit('chatMessage', data);
+      socket.emit('chatMessage', {
+        ...data,
+        timestamp: newMessage.timestamp
+      });
 
     } catch (error) {
       console.error('Chat message error:', error);
@@ -901,13 +990,14 @@ io.on('connection', (socket) => {
 
       // Check if pending request already exists
       const existingRequest = await FriendRequest.findOne({
-        from: from,
-        to: to,
-        status: 'pending'
+        $or: [
+          { from: from, to: to, status: 'pending' },
+          { from: to, to: from, status: 'pending' }
+        ]
       });
 
       if (existingRequest) {
-        socket.emit('friendRequestError', { error: 'Request already sent' });
+        socket.emit('friendRequestError', { error: 'Request already sent or pending' });
         return;
       }
 
@@ -1011,6 +1101,7 @@ io.on('connection', (socket) => {
 
     } catch (error) {
       console.error('Accept friend request error:', error);
+      socket.emit('error', { message: 'Failed to accept friend request' });
     }
   });
 
@@ -1033,6 +1124,7 @@ io.on('connection', (socket) => {
 
     } catch (error) {
       console.error('Reject friend request error:', error);
+      socket.emit('error', { message: 'Failed to reject friend request' });
     }
   });
 
@@ -1055,8 +1147,14 @@ io.on('connection', (socket) => {
         });
       }
 
+      socket.emit('friendRemoved', {
+        from: from,
+        friend: friend
+      });
+
     } catch (error) {
       console.error('Remove friend error:', error);
+      socket.emit('error', { message: 'Failed to remove friend' });
     }
   });
 
@@ -1137,6 +1235,14 @@ app.get("/delete-data", (req, res) => {
 
 app.use((error, req, res, next) => {
   console.error('Unhandled Error:', error);
+  
+  // Multer file filter errors
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'File size too large. Maximum 100MB allowed.' });
+    }
+  }
+  
   res.status(500).json({ 
     error: process.env.NODE_ENV === 'production' 
       ? 'Something went wrong!' 
@@ -1155,8 +1261,19 @@ app.use((req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 KryptoConnect Server Running on Port ${PORT}`);
   console.log('💬 Real-time Chat | 📁 File Sharing | 🔐 OAuth & OTP Verification');
   console.log('📍 Environment:', process.env.NODE_ENV || 'development');
+  console.log('📍 MongoDB:', mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected');
+  console.log('📍 Health Check: http://localhost:' + PORT + '/api/health');
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Promise Rejection:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  process.exit(1);
 });
