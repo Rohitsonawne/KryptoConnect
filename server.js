@@ -278,6 +278,28 @@ io.on('connection', (socket) => {
 // ============================
 
 const PORT = process.env.PORT || 3000;
+// ✅ Dummy Legal Pages (for Facebook App Verification)
+app.get("/privacy", (req, res) => {
+  res.send(`
+    <h2>Privacy Policy</h2>
+    <p>We value your privacy. KryptoConnect only uses your Facebook login to verify your identity and never stores your password.</p>
+  `);
+});
+
+app.get("/terms", (req, res) => {
+  res.send(`
+    <h2>Terms of Service</h2>
+    <p>By using KryptoConnect, you agree to follow our community guidelines and not share harmful content.</p>
+  `);
+});
+
+app.get("/delete-data", (req, res) => {
+  res.send(`
+    <h2>Data Deletion Instructions</h2>
+    <p>If you want to delete your data, please email us at 202401080009@mitaoe.ac.in — we will remove it within 48 hours.</p>
+  `);
+});
+
 server.listen(PORT, () => {
   console.log(`🚀 KryptoConnect Server Running on Port ${PORT}`);
   console.log('💬 Real-time Chat, 📁 File Sharing, 🔐 OAuth Active');
