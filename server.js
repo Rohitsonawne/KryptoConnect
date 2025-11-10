@@ -84,13 +84,17 @@ app.use(passport.session());
 // ============================
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kryptoconnect';
-mongoose.connect(MONGODB_URI, { 
-  useNewUrlParser: true, 
-  useUnifiedTopology: true 
-})
-.then(() => console.log('✅ MongoDB Connected Successfully!'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
 
+mongoose.connect(MONGODB_URI)
+  .then(() => {
+    console.log('✅ MongoDB Connected Successfully!');
+    console.log('📍 Database:', mongoose.connection.name);
+  })
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    // Continue without database for basic functionality
+    console.log('🔄 Starting server without database connection...');
+  });
 // ============================
 // Enhanced Schemas
 // ============================
