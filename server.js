@@ -22,7 +22,7 @@ const cors = require('cors');
 
 const app = express();
 const server = http.createServer(app);
-
+app.set('trust proxy', 1);
 // Enhanced CORS configuration
 app.use(cors({
   origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500"],
@@ -37,7 +37,7 @@ const io = new Server(server, {
     credentials: true
   }
 });
-app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Disable for development
