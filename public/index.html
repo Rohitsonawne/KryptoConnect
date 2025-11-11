@@ -18,11 +18,12 @@
   
   <!-- Security Headers -->
   <meta http-equiv="Content-Security-Policy" 
-        content="default-src 'self'; 
-                 script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
+        content="default-src 'self' http://localhost:*; 
+                 script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com http://localhost:*; 
                  style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; 
-                 img-src 'self' data: https:; 
-                 connect-src 'self' ws: wss:;">
+                 img-src 'self' data: https: blob:; 
+                 connect-src 'self' ws: wss: http://localhost:*; 
+                 font-src 'self' https://cdnjs.cloudflare.com;">
   
   <!-- Favicon -->
   <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
@@ -209,6 +210,20 @@
         <div class="chat-container" role="main">
           <!-- Sidebar - Friends & Users List -->
           <aside class="sidebar" role="complementary" aria-label="Friends and users list">
+            
+            <!-- Friend Requests Section -->
+            <div class="sidebar-section friend-requests-section" aria-labelledby="requestsHeading">
+              <h3 class="sidebar-title" id="requestsHeading">
+                <i class="fas fa-user-clock" aria-hidden="true"></i>
+                Friend Requests
+                <span class="request-count" id="requestCount">0</span>
+              </h3>
+              <ul class="users-list" id="friendRequestsList" role="list" aria-label="Friend requests list">
+                <li class="no-requests">No pending requests</li>
+              </ul>
+            </div>
+
+            <!-- Friends List Section -->
             <div class="sidebar-section" aria-labelledby="friendsHeading">
               <h3 class="sidebar-title" id="friendsHeading">
                 <i class="fas fa-user-friends" aria-hidden="true"></i>
@@ -219,17 +234,22 @@
                 </button>
               </h3>
               <ul class="users-list" id="friendsList" role="list" aria-label="Friends list">
-                <!-- Friends will be populated dynamically -->
+                <li class="no-friends">
+                  <i class="fas fa-users"></i>
+                  <p>No friends yet</p>
+                  <small>Add friends to start chatting!</small>
+                </li>
               </ul>
             </div>
 
+            <!-- All Users Section -->
             <div class="sidebar-section" aria-labelledby="usersHeading">
               <h3 class="sidebar-title" id="usersHeading">
                 <i class="fas fa-users" aria-hidden="true"></i>
                 All Users
               </h3>
               <ul class="users-list" id="usersList" role="list" aria-label="All users list">
-                <!-- Users will be populated dynamically -->
+                <li class="no-users">Loading users...</li>
               </ul>
             </div>
           </aside>
@@ -261,6 +281,20 @@
                   <i class="fas fa-comments" aria-hidden="true"></i>
                   <h3>Welcome to KryptoConnect!</h3>
                   <p>Select a friend from your list to start chatting or add new friends using the + button.</p>
+                  <div class="feature-highlights">
+                    <div class="feature-highlight">
+                      <i class="fas fa-shield-alt"></i>
+                      <span>End-to-End Encryption</span>
+                    </div>
+                    <div class="feature-highlight">
+                      <i class="fas fa-file-upload"></i>
+                      <span>100MB File Sharing</span>
+                    </div>
+                    <div class="feature-highlight">
+                      <i class="fas fa-user-friends"></i>
+                      <span>Friend System</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -308,7 +342,7 @@
               </div>
 
               <!-- Upload Information -->
-              <div class="upload-info" id="uploadInfo" aria-live="polite">
+              <div class="upload-info" id="uploadInfo" style="display: none;" aria-live="polite">
                 <i class="fas fa-info-circle" aria-hidden="true"></i>
                 Maximum file size: 100MB • Supported: Images, Videos, Documents
               </div>
@@ -352,8 +386,8 @@
         <div class="feature-icon" aria-hidden="true">
           <i class="fas fa-user-friends"></i>
         </div>
-        <h3 id="feature2Heading" class="feature-title">Friends System</h3>
-        <p>Add friends to your network and chat privately with ease. Manage your connections securely.</p>
+        <h3 id="feature2Heading" class="feature-title">Smart Friend System</h3>
+        <p>Add friends, manage requests, and build your network with our intuitive friend management system.</p>
       </div>
 
       <div class="feature-card" role="article" aria-labelledby="feature3Heading">
@@ -407,10 +441,11 @@
           <label for="friendUsername">Username</label>
           <input type="text" id="friendUsername" placeholder="Enter username to add" 
                  aria-required="true" />
+          <small class="input-hint">Enter the exact username of the person you want to add</small>
         </div>
         
         <button class="btn" id="sendFriendRequestBtn">
-          <i class="fas fa-paper-plane" aria-hidden="true"></i> Send Request
+          <i class="fas fa-paper-plane" aria-hidden="true"></i> Send Friend Request
         </button>
         
         <div class="error-message" id="friendError" role="alert" aria-live="polite"></div>
@@ -441,5 +476,234 @@
     gtag('js', new Date());
     gtag('config', 'GA_MEASUREMENT_ID');
   </script>
+
+  <style>
+    /* Additional Styles for New Elements */
+    .friend-requests-section {
+      background: rgba(0, 255, 204, 0.05);
+      border-radius: 10px;
+      padding: 15px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(0, 255, 204, 0.2);
+    }
+
+    .friend-request-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border-left: 3px solid var(--primary);
+    }
+
+    .request-info {
+      flex: 1;
+    }
+
+    .request-info strong {
+      color: var(--primary);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .request-info small {
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+    }
+
+    .friend-request-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-accept {
+      background: var(--success);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.3s ease;
+    }
+
+    .btn-accept:hover {
+      background: #00ccaa;
+      transform: translateY(-1px);
+    }
+
+    .btn-reject {
+      background: var(--error);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.3s ease;
+    }
+
+    .btn-reject:hover {
+      background: #ff5252;
+      transform: translateY(-1px);
+    }
+
+    .request-count {
+      background: var(--primary);
+      color: var(--secondary);
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: bold;
+    }
+
+    .no-requests {
+      text-align: center;
+      color: var(--text-secondary);
+      font-style: italic;
+      padding: 20px;
+    }
+
+    .feature-highlights {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .feature-highlight {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-secondary);
+    }
+
+    .feature-highlight i {
+      color: var(--primary);
+      width: 20px;
+    }
+
+    /* Mobile Responsive for Friend Requests */
+    @media (max-width: 768px) {
+      .friend-request-item {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      
+      .friend-request-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+      
+      .btn-accept, .btn-reject {
+        flex: 1;
+        text-align: center;
+      }
+    }
+
+    /* OTP Timer Styles */
+    .otp-timer {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 10px 15px;
+      border-radius: 8px;
+      text-align: center;
+      margin: 10px 0;
+      color: var(--primary);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .input-hint {
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      margin-top: 5px;
+      display: block;
+    }
+
+    /* Pending Badge */
+    .pending-badge {
+      background: rgba(255, 204, 0, 0.2);
+      color: #ffcc00;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    /* Verified Badge */
+    .verified-badge {
+      color: var(--primary);
+      margin-left: 5px;
+    }
+
+    /* Social Login Buttons */
+    .social-login {
+      display: flex;
+      gap: 10px;
+      margin: 15px 0;
+    }
+
+    .social-btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .social-btn.google {
+      background: #db4437;
+      color: white;
+    }
+
+    .social-btn.facebook {
+      background: #4267B2;
+      color: white;
+    }
+
+    .social-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+
+    .divider {
+      text-align: center;
+      margin: 20px 0;
+      color: var(--text-secondary);
+      position: relative;
+    }
+
+    .divider::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .divider span {
+      background: var(--bg-dark);
+      padding: 0 15px;
+      position: relative;
+    }
+  </style>
 </body>
 </html>
