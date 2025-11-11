@@ -1,5 +1,5 @@
 // ============================
-// KryptoConnect - Enhanced Client.js (FIXED ALL ISSUES)
+// KryptoConnect - Enhanced Client.js (ALL ISSUES FIXED)
 // ============================
 
 // Improved Socket connection with better error handling
@@ -46,8 +46,9 @@ const APP_STATE = {
   currentEmailPhone: '',
   pendingRequests: [],
   socketConnected: false,
-  messageQueue: [],
-  isSending: false
+  isSending: false,
+  sentMessageIds: new Set(),
+  lastMessageTimestamp: 0
 };
 
 const CONFIG = {
@@ -116,7 +117,6 @@ function maskEmailPhone(input) {
 }
 
 function showNotification(message, type = 'info') {
-  // Remove existing notifications of same type
   const existingNotifications = document.querySelectorAll('.notification');
   existingNotifications.forEach(notif => {
     if (notif.textContent.includes(message)) {
@@ -169,7 +169,7 @@ function showNotification(message, type = 'info') {
 }
 
 // ============================
-// Local Storage Functions (FIXED)
+// Local Storage Functions
 // ============================
 
 function getFriends(username) {
@@ -226,7 +226,6 @@ function saveChatMessage(user1, user2, message) {
   const history = getChatHistory(user1, user2);
   history.push(message);
   
-  // Keep only last 1000 messages to prevent storage overflow
   if (history.length > 1000) {
     history.splice(0, history.length - 1000);
   }
@@ -286,7 +285,6 @@ async function handleSendOtp() {
   const confirmPassword = ($id('regConfirmPassword')?.value || '').trim();
   const regError = $id('regError');
 
-  // Validation
   if (!username || !emailPhone || !password || !confirmPassword) {
     if (regError) regError.textContent = 'All fields are required';
     return;
@@ -340,12 +338,10 @@ async function handleSendOtp() {
     if (data.success) {
       APP_STATE.currentEmailPhone = emailPhone;
       
-      // Switch to OTP verification step
       $id('signupStep1').style.display = 'none';
       $id('signupStep2').style.display = 'block';
       $id('otpSentTo').textContent = maskEmailPhone(emailPhone);
       
-      // For development - show OTP in console
       if (data.debugOtp) {
         console.log('🔐 Development OTP:', data.debugOtp);
         showNotification(`OTP for testing: ${data.debugOtp}`, 'info');
@@ -418,7 +414,6 @@ async function handleVerifyOtp() {
 
       showNotification('Account created successfully!', 'success');
 
-      // Auto login
       setTimeout(() => {
         localStorage.setItem('kryptoconnect_current_user', username);
         window.location.href = '/';
@@ -532,7 +527,6 @@ async function handleLogin() {
       APP_STATE.currentUser = username;
       localStorage.setItem('kryptoconnect_current_user', username);
 
-      // Update socket authentication
       socket.auth.username = username;
       socket.disconnect().connect();
 
@@ -773,6 +767,42 @@ function loadFriendRequests() {
   });
 }
 
+// FIXED: Friend Request Function
+function sendFriendRequest(fromUser, toUser) {
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
+  console.log('Sending friend request:', { from: fromUser, to: toUser });
+
+  // Check if already friends (LOCAL CHECK)
+  const friends = getFriends(APP_STATE.currentUser);
+  if (friends.includes(toUser)) {
+    showNotification('This user is already your friend', 'info');
+    return;
+  }
+
+  // Check if request already pending (LOCAL CHECK)
+  const pendingRequests = getPendingRequests(toUser);
+  if (pendingRequests.includes(fromUser)) {
+    showNotification('Friend request already sent', 'info');
+    return;
+  }
+
+  socket.emit('friendRequest', { 
+    from: fromUser, 
+    to: toUser 
+  });
+  
+  // TEMPORARILY add to pending requests for UI feedback
+  savePendingRequest(toUser, fromUser);
+  renderUsersList();
+  loadFriendRequests();
+  
+  showNotification(`Friend request sent to ${toUser}`, 'success');
+}
+
 // Global functions for friend requests
 window.acceptFriendRequest = function(fromUser) {
   if (!APP_STATE.socketConnected) {
@@ -867,7 +897,6 @@ function loadChatHistory(username) {
     let lastDate = null;
     
     history.forEach(message => {
-      // Add date separator if date changed
       const messageDate = formatDate(message.timestamp);
       if (messageDate !== lastDate) {
         const dateSeparator = document.createElement('div');
@@ -899,15 +928,29 @@ function loadChatHistory(username) {
   scrollToBottom();
 }
 
-function addMessageToChat(sender, text, time, isSender) {
+// FIXED: Add message to chat with duplicate prevention
+function addMessageToChat(sender, text, time, isSender, messageId = null) {
   const messagesContainer = $id('messagesContainer');
   if (!messagesContainer) return;
   
   const noMessagesElement = messagesContainer.querySelector('.no-chat-selected');
   if (noMessagesElement) noMessagesElement.remove();
 
+  // Check if message already exists in DOM
+  if (messageId) {
+    const existingMessage = messagesContainer.querySelector(`[data-message-id="${messageId}"]`);
+    if (existingMessage) {
+      console.log('⚠️ Message already in DOM, skipping:', messageId);
+      return;
+    }
+  }
+
   const messageElement = document.createElement('div');
   messageElement.className = `message ${isSender ? 'sent' : 'received'}`;
+  
+  if (messageId) {
+    messageElement.setAttribute('data-message-id', messageId);
+  }
 
   messageElement.innerHTML = `
     ${!isSender ? `<div class="message-sender">${escapeHTML(sender)}</div>` : '<div class="message-sender">You</div>'}
@@ -922,16 +965,19 @@ function addMessageToChat(sender, text, time, isSender) {
   }
 }
 
-// FIXED: Double message sending issue
+// FIXED: Send Message Function (No Double Messages)
 function sendMessage() {
-  if (APP_STATE.isSending) return; // Prevent multiple sends
-  
+  if (APP_STATE.isSending) {
+    console.log('⚠️ Message already sending, skipping...');
+    return;
+  }
+
   const messageInput = $id('messageInput');
   if (!messageInput) return;
   
   const text = messageInput.value.trim();
   
-  console.log('📤 Sending message:', {
+  console.log('📤 Attempting to send message:', {
     text: text,
     from: APP_STATE.currentUser,
     to: APP_STATE.currentChatWith,
@@ -950,20 +996,39 @@ function sendMessage() {
     return;
   }
 
+  // Prevent rapid sending
+  const now = Date.now();
+  if (now - APP_STATE.lastMessageTimestamp < 1000) {
+    showNotification('Please wait before sending another message', 'warning');
+    return;
+  }
+
   APP_STATE.isSending = true;
+  APP_STATE.lastMessageTimestamp = now;
+  
   const timestamp = Date.now();
   const time = formatTime(timestamp);
 
-  try {
-    // Only show locally, don't save until confirmed from server
-    addMessageToChat(APP_STATE.currentUser, text, time, true);
+  // Generate unique message ID
+  const messageId = `${APP_STATE.currentUser}_${APP_STATE.currentChatWith}_${timestamp}`;
+  
+  // Add to sent messages to prevent duplicates
+  APP_STATE.sentMessageIds.add(messageId);
 
+  try {
+    // Show message locally immediately (OPTIMISTIC UI)
+    addMessageToChat(APP_STATE.currentUser, text, time, true, messageId);
+
+    // Send to server
     socket.emit('chatMessage', { 
       from: APP_STATE.currentUser, 
       to: APP_STATE.currentChatWith, 
       message: text, 
-      timestamp 
+      timestamp: timestamp,
+      messageId: messageId
     });
+
+    console.log('✅ Message sent to server with ID:', messageId);
 
     messageInput.value = '';
     messageInput.focus();
@@ -978,10 +1043,16 @@ function sendMessage() {
     ensureInputVisible();
 
   } catch (error) {
-    console.error('Send message error:', error);
+    console.error('❌ Send message error:', error);
     showNotification('Failed to send message', 'error');
+    
+    // Remove from sent messages if failed
+    APP_STATE.sentMessageIds.delete(messageId);
   } finally {
-    APP_STATE.isSending = false;
+    // Reset sending flag after a short delay
+    setTimeout(() => {
+      APP_STATE.isSending = false;
+    }, 500);
   }
 }
 
@@ -1284,22 +1355,6 @@ function sendFriendRequestHandler() {
   if ($id('addFriendModal')) $id('addFriendModal').style.display = 'none';
 }
 
-function sendFriendRequest(fromUser, toUser) {
-  if (!APP_STATE.socketConnected) {
-    showNotification('Connection lost. Please try again.', 'error');
-    return;
-  }
-
-  socket.emit('friendRequest', { 
-    from: fromUser, 
-    to: toUser 
-  });
-  
-  savePendingRequest(toUser, fromUser);
-  renderUsersList();
-  loadFriendRequests();
-}
-
 function clearChat() {
   if (!APP_STATE.currentChatWith) return;
   
@@ -1416,32 +1471,50 @@ socket.on('userOffline', (username) => {
   showNotification(`${username} is now offline`, 'info');
 });
 
-// FIXED: Double message receive issue
+// FIXED: Message receive with duplicate prevention
 socket.on('chatMessage', (data) => {
   console.log('📥 Received message from server:', data);
   
-  // Only process if message is for current chat
+  // Check if this is for current chat
   if ((data.from === APP_STATE.currentChatWith && data.to === APP_STATE.currentUser) ||
       (data.from === APP_STATE.currentUser && data.to === APP_STATE.currentChatWith)) {
     
-    // Check if message already exists to prevent duplicates
+    // Generate message ID for comparison
+    const receivedMessageId = data.messageId || `${data.from}_${data.to}_${data.timestamp}`;
+    
+    // Check if message already exists (DUPLICATE PREVENTION)
+    if (APP_STATE.sentMessageIds.has(receivedMessageId)) {
+      console.log('⚠️ Duplicate message ignored (already sent):', receivedMessageId);
+      APP_STATE.sentMessageIds.delete(receivedMessageId); // Clean up
+      return;
+    }
+
+    // Check local storage for duplicates
     const existingMessages = getChatHistory(APP_STATE.currentUser, APP_STATE.currentChatWith);
     const isDuplicate = existingMessages.some(msg => 
-      msg.timestamp === data.timestamp && msg.text === data.message
+      Math.abs(msg.timestamp - data.timestamp) < 1000 && msg.text === data.message
     );
-    
-    if (!isDuplicate) {
-      addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from === APP_STATE.currentUser);
-      
-      saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
-        sender: data.from,
-        text: data.message,
-        time: formatTime(data.timestamp),
-        timestamp: data.timestamp
-      });
-      
-      ensureInputVisible();
+
+    if (isDuplicate) {
+      console.log('⚠️ Duplicate message ignored (in history):', data.message);
+      return;
     }
+
+    console.log('✅ Adding new message to chat:', data.message);
+    
+    // Add message to UI
+    addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from === APP_STATE.currentUser, receivedMessageId);
+    
+    // Save to local storage
+    saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
+      sender: data.from,
+      text: data.message,
+      time: formatTime(data.timestamp),
+      timestamp: data.timestamp,
+      messageId: receivedMessageId
+    });
+    
+    ensureInputVisible();
   }
 });
 
@@ -1457,7 +1530,7 @@ socket.on('typingStop', (data) => {
   }
 });
 
-// Friend events
+// Friend events - ADD THESE NEW EVENTS
 socket.on('friendRequest', (data) => {
   if (data.to === APP_STATE.currentUser) {
     console.log('New friend request received from:', data.from);
@@ -1474,14 +1547,22 @@ socket.on('friendRequest', (data) => {
   }
 });
 
+// ADD THESE NEW SOCKET EVENTS:
 socket.on('friendRequestSent', (data) => {
+  console.log('Friend request sent successfully:', data);
   showNotification(`Friend request sent to ${data.to}`, 'success');
   renderUsersList();
   loadFriendRequests();
 });
 
 socket.on('friendRequestError', (data) => {
+  console.error('Friend request error:', data);
   showNotification(data.error, 'error');
+  
+  // Remove from pending if error
+  removePendingRequest(data.to, APP_STATE.currentUser);
+  renderUsersList();
+  loadFriendRequests();
 });
 
 socket.on('friendRequestAccepted', (data) => {
