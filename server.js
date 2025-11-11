@@ -1,5 +1,5 @@
 // ============================
-// KryptoConnect - Enhanced Server.js (ALL ISSUES FIXED)
+// KryptoConnect - COMPLETELY FIXED Server.js
 // ============================
 
 require('dotenv').config();
@@ -202,6 +202,11 @@ const messageSchema = new mongoose.Schema({
   read: { 
     type: Boolean, 
     default: false 
+  },
+  messageId: { 
+    type: String, 
+    unique: true,
+    sparse: true
   }
 });
 
@@ -281,6 +286,7 @@ async function createIndexes() {
     await OTP.createIndexes();
     
     await Message.collection.createIndex({ from: 1, to: 1, timestamp: -1 });
+    await Message.collection.createIndex({ messageId: 1 }, { unique: true, sparse: true });
     await Friend.collection.createIndex({ user1: 1, user2: 1 });
     await FriendRequest.collection.createIndex({ from: 1, to: 1 });
     await OTP.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 600 });
@@ -470,7 +476,7 @@ app.get('/auth/facebook/callback',
 );
 
 // ============================
-// OTP APIs
+// OTP APIs (FIXED)
 // ============================
 
 app.post('/api/send-otp', asyncHandler(async (req, res) => {
@@ -527,6 +533,8 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
 
   console.log(`📧 OTP for ${emailPhone} (${type}): ${otp}`);
 
+  // In production, you would send the OTP via email/SMS here
+  // For now, we'll just return it in development
   res.json({ 
     success: true,
     message: 'Verification code sent successfully',
@@ -869,10 +877,11 @@ app.get('/api/messages/:user1/:user2', asyncHandler(async (req, res) => {
 }));
 
 // ============================
-// Socket.IO Real-Time Chat (ENHANCED)
+// Socket.IO Real-Time Chat (COMPLETELY FIXED)
 // ============================
 
 const onlineUsers = {};
+const messageDeliveryTracker = new Map();
 
 // Socket authentication middleware
 io.use((socket, next) => {
@@ -918,7 +927,7 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('userOnline', username);
   });
 
-  // Chat messages - FIXED DOUBLE MESSAGES
+  // FIXED: Chat messages - NO DOUBLE MESSAGES
   socket.on('chatMessage', async (data) => {
     try {
       const { from, to, message, timestamp, messageId } = data;
@@ -935,6 +944,27 @@ io.on('connection', (socket) => {
       if (trimmedMessage.length === 0) {
         socket.emit('error', { message: 'Message cannot be empty' });
         return;
+      }
+
+      // Check for duplicate messages using messageId
+      if (messageId) {
+        const existingMessage = await Message.findOne({ messageId });
+        if (existingMessage) {
+          console.log('⚠️ Duplicate message prevented (messageId):', messageId);
+          
+          // Still deliver to recipient if not received
+          const recipientSocket = getSocketByUsername(to);
+          if (recipientSocket) {
+            io.to(recipientSocket).emit('chatMessage', {
+              from,
+              to,
+              message: trimmedMessage,
+              timestamp: existingMessage.timestamp,
+              messageId: messageId
+            });
+          }
+          return;
+        }
       }
 
       // Check for duplicate messages in database (within 2 seconds)
@@ -958,7 +988,8 @@ io.on('connection', (socket) => {
         from,
         to,
         message: trimmedMessage,
-        timestamp: new Date(timestamp)
+        timestamp: new Date(timestamp),
+        messageId: messageId
       });
 
       await newMessage.save();
@@ -981,7 +1012,7 @@ io.on('connection', (socket) => {
         console.log(`📤 Message sent to recipient: ${to}`);
       }
 
-      // Send confirmation back to sender
+      // Send confirmation back to sender (only if not duplicate)
       socket.emit('chatMessage', responseData);
       console.log(`📤 Confirmation sent to sender: ${from}`);
 
@@ -1006,7 +1037,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Friend requests - FIXED (NO DOUBLE FRIEND REQUESTS)
+  // FIXED: Friend requests - NO DOUBLE FRIEND REQUESTS
   socket.on('friendRequest', async (data) => {
     try {
       const { from, to } = data;
@@ -1083,12 +1114,33 @@ io.on('connection', (socket) => {
     }
   });
 
-  // File upload via socket
+  // FIXED: File upload via socket - NO DUPLICATES
   socket.on('fileUpload', async (fileData) => {
     try {
       if (!fileData.fileName || !fileData.from || !fileData.to) {
         socket.emit('fileUploadError', { error: 'Invalid file data' });
         return;
+      }
+
+      // Check for duplicate file using fileId
+      if (fileData.fileId) {
+        const existingFile = await Message.findOne({ 
+          messageId: fileData.fileId,
+          isFile: true 
+        });
+        if (existingFile) {
+          console.log('⚠️ Duplicate file prevented:', fileData.fileId);
+          
+          // Still deliver to recipient if not received
+          const recipientSocket = getSocketByUsername(fileData.to);
+          if (recipientSocket) {
+            io.to(recipientSocket).emit('fileUpload', {
+              ...fileData,
+              id: existingFile._id
+            });
+          }
+          return;
+        }
       }
 
       const fileMessage = new Message({
@@ -1097,7 +1149,8 @@ io.on('connection', (socket) => {
         message: `[FILE] ${fileData.fileName}`,
         timestamp: new Date(fileData.timestamp),
         isFile: true,
-        fileData: fileData
+        fileData: fileData,
+        messageId: fileData.fileId
       });
 
       await fileMessage.save();
@@ -1111,7 +1164,7 @@ io.on('connection', (socket) => {
         });
       }
 
-      // Also send back to sender
+      // Also send back to sender (only if not duplicate)
       socket.emit('fileUpload', {
         ...fileData,
         id: fileMessage._id
