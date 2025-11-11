@@ -1,5 +1,5 @@
 // ============================
-// KryptoConnect - Enhanced Client.js (FIXED)
+// KryptoConnect - Enhanced Client.js (FIXED ALL ISSUES)
 // ============================
 
 // Improved Socket connection with better error handling
@@ -45,7 +45,9 @@ const APP_STATE = {
   otpTimeLeft: 120,
   currentEmailPhone: '',
   pendingRequests: [],
-  socketConnected: false
+  socketConnected: false,
+  messageQueue: [],
+  isSending: false
 };
 
 const CONFIG = {
@@ -167,7 +169,78 @@ function showNotification(message, type = 'info') {
 }
 
 // ============================
-// OTP System Functions (IMPROVED)
+// Local Storage Functions (FIXED)
+// ============================
+
+function getFriends(username) {
+  const key = `friends_${username}`;
+  return JSON.parse(localStorage.getItem(key)) || [];
+}
+
+function saveFriend(username, friendUsername) {
+  const key = `friends_${username}`;
+  const friends = getFriends(username);
+  if (!friends.includes(friendUsername)) {
+    friends.push(friendUsername);
+    localStorage.setItem(key, JSON.stringify(friends));
+    return true;
+  }
+  return false;
+}
+
+function removeFriend(username, friendUsername) {
+  const key = `friends_${username}`;
+  let friends = getFriends(username);
+  friends = friends.filter(f => f !== friendUsername);
+  localStorage.setItem(key, JSON.stringify(friends));
+}
+
+function getPendingRequests(username) {
+  const key = `pending_requests_${username}`;
+  return JSON.parse(localStorage.getItem(key)) || [];
+}
+
+function savePendingRequest(toUser, fromUser) {
+  const key = `pending_requests_${toUser}`;
+  const requests = getPendingRequests(toUser);
+  if (!requests.includes(fromUser)) {
+    requests.push(fromUser);
+    localStorage.setItem(key, JSON.stringify(requests));
+  }
+}
+
+function removePendingRequest(username, fromUser) {
+  const key = `pending_requests_${username}`;
+  let requests = getPendingRequests(username);
+  requests = requests.filter(req => req !== fromUser);
+  localStorage.setItem(key, JSON.stringify(requests));
+}
+
+function getChatHistory(user1, user2) {
+  const key = `chat_${[user1, user2].sort().join('_')}`;
+  return JSON.parse(localStorage.getItem(key)) || [];
+}
+
+function saveChatMessage(user1, user2, message) {
+  const key = `chat_${[user1, user2].sort().join('_')}`;
+  const history = getChatHistory(user1, user2);
+  history.push(message);
+  
+  // Keep only last 1000 messages to prevent storage overflow
+  if (history.length > 1000) {
+    history.splice(0, history.length - 1000);
+  }
+  
+  localStorage.setItem(key, JSON.stringify(history));
+}
+
+function clearChatHistory(user1, user2) {
+  const key = `chat_${[user1, user2].sort().join('_')}`;
+  localStorage.setItem(key, JSON.stringify([]));
+}
+
+// ============================
+// OTP System Functions
 // ============================
 
 function startOtpTimer() {
@@ -264,9 +337,7 @@ async function handleSendOtp() {
       return;
     }
 
-    // Check for success flag
     if (data.success) {
-      // OTP sent successfully
       APP_STATE.currentEmailPhone = emailPhone;
       
       // Switch to OTP verification step
@@ -280,7 +351,6 @@ async function handleSendOtp() {
         showNotification(`OTP for testing: ${data.debugOtp}`, 'info');
       }
       
-      // Start OTP timer
       startOtpTimer();
 
       if (regError) regError.textContent = '';
@@ -340,9 +410,7 @@ async function handleVerifyOtp() {
       return;
     }
 
-    // Check for success flag
     if (data.success) {
-      // OTP verified and account created
       if (otpError) {
         otpError.textContent = 'Account created successfully!';
         otpError.className = 'success-message';
@@ -398,9 +466,7 @@ async function handleResendOtp() {
       return;
     }
 
-    // Check for success flag
     if (data.success) {
-      // For development
       if (data.debugOtp) {
         console.log('🔐 New OTP:', data.debugOtp);
         showNotification(`New OTP: ${data.debugOtp}`, 'info');
@@ -425,7 +491,7 @@ async function handleResendOtp() {
 }
 
 // ============================
-// Authentication Functions (IMPROVED)
+// Authentication Functions
 // ============================
 
 async function handleLogin() {
@@ -460,9 +526,7 @@ async function handleLogin() {
       return;
     }
 
-    // Check for success flag
     if (data.success) {
-      // Login successful
       if (loginError) loginError.textContent = '';
       
       APP_STATE.currentUser = username;
@@ -474,7 +538,6 @@ async function handleLogin() {
 
       showNotification('Login successful!', 'success');
 
-      // Redirect or reload based on page
       if (isLogin || isSignup) {
         window.location.href = '/';
       } else {
@@ -493,90 +556,6 @@ async function handleLogin() {
     if (loginBtn) {
       loginBtn.disabled = false;
       loginBtn.innerHTML = 'Login';
-    }
-  }
-}
-
-async function handleRegister() {
-  const username = ($id('regUsername')?.value || '').trim();
-  const password = ($id('regPassword')?.value || '').trim();
-  const confirmPassword = ($id('regConfirmPassword')?.value || '').trim();
-  const regError = $id('regError');
-
-  if (!username || !password || !confirmPassword) {
-    if (regError) regError.textContent = 'Please fill in all fields';
-    return;
-  }
-
-  if (password !== confirmPassword) {
-    if (regError) regError.textContent = 'Passwords do not match';
-    return;
-  }
-
-  if (username.length < 3) {
-    if (regError) regError.textContent = 'Username must be at least 3 characters';
-    return;
-  }
-
-  if (password.length < 6) {
-    if (regError) regError.textContent = 'Password must be at least 6 characters';
-    return;
-  }
-
-  try {
-    const registerBtn = $id('registerBtn');
-    if (registerBtn) {
-      registerBtn.disabled = true;
-      registerBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-    }
-
-    const response = await fetch('/api/register', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ username, password })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      if (regError) regError.textContent = data.error;
-      return;
-    }
-
-    // Check for success flag
-    if (data.success) {
-      if (regError) {
-        regError.textContent = 'Registration successful! Please login.';
-        regError.className = 'success-message';
-      }
-
-      showNotification('Registration successful!', 'success');
-
-      // Switch to login form
-      setTimeout(() => {
-        if ($id('registerForm')) $id('registerForm').style.display = 'none';
-        if ($id('loginForm')) $id('loginForm').style.display = 'block';
-        if ($id('loginUsername')) $id('loginUsername').value = username;
-        if (regError) {
-          regError.textContent = '';
-          regError.className = 'error-message';
-        }
-      }, 2000);
-    } else {
-      if (regError) regError.textContent = data.error || 'Registration failed';
-    }
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    if (regError) regError.textContent = 'Network error. Please try again.';
-    showNotification('Network error during registration', 'error');
-  } finally {
-    const registerBtn = $id('registerBtn');
-    if (registerBtn) {
-      registerBtn.disabled = false;
-      registerBtn.innerHTML = 'Sign Up';
     }
   }
 }
@@ -609,7 +588,7 @@ function handleLogout() {
 }
 
 // ============================
-// Chat System Functions (IMPROVED)
+// Chat System Functions (FIXED DOUBLE MESSAGES)
 // ============================
 
 async function loadAllUsers() {
@@ -620,6 +599,7 @@ async function loadAllUsers() {
     }
     APP_STATE.allUsers = await response.json();
     renderUsersList();
+    loadFriendRequests();
   } catch (error) {
     console.error('Error loading users:', error);
     showNotification('Failed to load users', 'error');
@@ -751,6 +731,98 @@ function loadFriendsList() {
   });
 }
 
+// FRIEND REQUEST SYSTEM (FIXED)
+function loadFriendRequests() {
+  const requestsList = $id('friendRequestsList');
+  const requestCount = $id('requestCount');
+  
+  if (!requestsList) return;
+  
+  const pendingRequests = getPendingRequests(APP_STATE.currentUser);
+  
+  if (pendingRequests.length === 0) {
+    requestsList.innerHTML = '<li class="no-requests">No pending requests</li>';
+    if (requestCount) requestCount.textContent = '0';
+    return;
+  }
+  
+  if (requestCount) requestCount.textContent = pendingRequests.length.toString();
+  
+  requestsList.innerHTML = '';
+  
+  pendingRequests.forEach(fromUser => {
+    const requestItem = document.createElement('li');
+    requestItem.className = 'friend-request-item';
+    
+    requestItem.innerHTML = `
+      <div class="request-info">
+        <strong>${escapeHTML(fromUser)}</strong>
+        <small>wants to be your friend</small>
+      </div>
+      <div class="friend-request-actions">
+        <button class="btn-accept" onclick="acceptFriendRequest('${escapeHTML(fromUser)}')">
+          <i class="fas fa-check"></i> Accept
+        </button>
+        <button class="btn-reject" onclick="rejectFriendRequest('${escapeHTML(fromUser)}')">
+          <i class="fas fa-times"></i> Reject
+        </button>
+      </div>
+    `;
+    
+    requestsList.appendChild(requestItem);
+  });
+}
+
+// Global functions for friend requests
+window.acceptFriendRequest = function(fromUser) {
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
+  console.log('Accepting friend request from:', fromUser);
+  
+  socket.emit('acceptFriendRequest', { 
+    from: fromUser, 
+    to: APP_STATE.currentUser 
+  });
+  
+  // Local storage update
+  saveFriend(APP_STATE.currentUser, fromUser);
+  saveFriend(fromUser, APP_STATE.currentUser);
+  removePendingRequest(APP_STATE.currentUser, fromUser);
+  
+  // UI Update
+  loadFriendRequests();
+  loadFriendsList();
+  renderUsersList();
+  
+  showNotification(`You are now friends with ${fromUser}`, 'success');
+};
+
+window.rejectFriendRequest = function(fromUser) {
+  if (!APP_STATE.socketConnected) {
+    showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
+  console.log('Rejecting friend request from:', fromUser);
+  
+  socket.emit('rejectFriendRequest', { 
+    from: fromUser, 
+    to: APP_STATE.currentUser 
+  });
+  
+  // Local storage update
+  removePendingRequest(APP_STATE.currentUser, fromUser);
+  
+  // UI Update
+  loadFriendRequests();
+  renderUsersList();
+  
+  showNotification(`Friend request from ${fromUser} rejected`, 'info');
+};
+
 function startChatWith(username) {
   if (!username || !APP_STATE.currentUser) {
     showNotification('Please login to start chatting', 'error');
@@ -850,11 +922,22 @@ function addMessageToChat(sender, text, time, isSender) {
   }
 }
 
+// FIXED: Double message sending issue
 function sendMessage() {
+  if (APP_STATE.isSending) return; // Prevent multiple sends
+  
   const messageInput = $id('messageInput');
   if (!messageInput) return;
   
   const text = messageInput.value.trim();
+  
+  console.log('📤 Sending message:', {
+    text: text,
+    from: APP_STATE.currentUser,
+    to: APP_STATE.currentChatWith,
+    connected: APP_STATE.socketConnected
+  });
+
   if (!text || !APP_STATE.currentChatWith) {
     if (!APP_STATE.currentChatWith) {
       showNotification('Please select a friend to chat with', 'error');
@@ -867,36 +950,39 @@ function sendMessage() {
     return;
   }
 
+  APP_STATE.isSending = true;
   const timestamp = Date.now();
   const time = formatTime(timestamp);
 
-  socket.emit('chatMessage', { 
-    from: APP_STATE.currentUser, 
-    to: APP_STATE.currentChatWith, 
-    message: text, 
-    timestamp 
-  });
+  try {
+    // Only show locally, don't save until confirmed from server
+    addMessageToChat(APP_STATE.currentUser, text, time, true);
 
-  addMessageToChat(APP_STATE.currentUser, text, time, true);
+    socket.emit('chatMessage', { 
+      from: APP_STATE.currentUser, 
+      to: APP_STATE.currentChatWith, 
+      message: text, 
+      timestamp 
+    });
 
-  saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
-    sender: APP_STATE.currentUser,
-    text: text,
-    time: time,
-    timestamp: timestamp
-  });
+    messageInput.value = '';
+    messageInput.focus();
 
-  messageInput.value = '';
-  messageInput.focus();
+    clearTimeout(APP_STATE.typingTimer);
+    APP_STATE.isTyping = false;
+    socket.emit('typingStop', { 
+      from: APP_STATE.currentUser, 
+      to: APP_STATE.currentChatWith 
+    });
 
-  clearTimeout(APP_STATE.typingTimer);
-  APP_STATE.isTyping = false;
-  socket.emit('typingStop', { 
-    from: APP_STATE.currentUser, 
-    to: APP_STATE.currentChatWith 
-  });
+    ensureInputVisible();
 
-  ensureInputVisible();
+  } catch (error) {
+    console.error('Send message error:', error);
+    showNotification('Failed to send message', 'error');
+  } finally {
+    APP_STATE.isSending = false;
+  }
 }
 
 const debouncedTyping = debounce(() => {
@@ -927,7 +1013,7 @@ function handleTyping() {
 }
 
 // ============================
-// File Upload Functions (IMPROVED)
+// File Upload Functions
 // ============================
 
 function toggleFileUpload() {
@@ -1059,7 +1145,6 @@ async function uploadFile() {
 
     const fileData = await response.json();
     
-    // Check for success flag
     if (fileData.success) {
       fileData.from = APP_STATE.currentUser;
       fileData.to = APP_STATE.currentChatWith;
@@ -1153,7 +1238,7 @@ function addFileMessageToChat(fileData, isSender) {
 }
 
 // ============================
-// Friend System Functions (IMPROVED)
+// Friend System Functions
 // ============================
 
 function sendFriendRequestHandler() {
@@ -1212,61 +1297,8 @@ function sendFriendRequest(fromUser, toUser) {
   
   savePendingRequest(toUser, fromUser);
   renderUsersList();
+  loadFriendRequests();
 }
-
-// Global functions for friend requests
-window.acceptFriendRequest = function(fromUser) {
-  if (!APP_STATE.socketConnected) {
-    showNotification('Connection lost. Please try again.', 'error');
-    return;
-  }
-
-  socket.emit('acceptFriendRequest', { 
-    from: fromUser, 
-    to: APP_STATE.currentUser 
-  });
-  
-  saveFriend(APP_STATE.currentUser, fromUser);
-  saveFriend(fromUser, APP_STATE.currentUser);
-  removePendingRequest(APP_STATE.currentUser, fromUser);
-  
-  loadFriendsList();
-  renderUsersList();
-  
-  // Remove notification
-  const notifications = document.querySelectorAll('.friend-request-notification');
-  notifications.forEach(notif => {
-    if (notif.innerHTML.includes(fromUser)) {
-      notif.remove();
-    }
-  });
-  
-  showNotification(`You are now friends with ${fromUser}`, 'success');
-};
-
-window.rejectFriendRequest = function(fromUser) {
-  if (!APP_STATE.socketConnected) {
-    showNotification('Connection lost. Please try again.', 'error');
-    return;
-  }
-
-  socket.emit('rejectFriendRequest', { 
-    from: fromUser, 
-    to: APP_STATE.currentUser 
-  });
-  
-  removePendingRequest(APP_STATE.currentUser, fromUser);
-  
-  // Remove notification
-  const notifications = document.querySelectorAll('.friend-request-notification');
-  notifications.forEach(notif => {
-    if (notif.innerHTML.includes(fromUser)) {
-      notif.remove();
-    }
-  });
-  
-  showNotification(`Friend request from ${fromUser} rejected`, 'info');
-};
 
 function clearChat() {
   if (!APP_STATE.currentChatWith) return;
@@ -1279,41 +1311,8 @@ function clearChat() {
 }
 
 // ============================
-// UI Helper Functions (IMPROVED)
+// UI Helper Functions
 // ============================
-
-function showFriendRequestNotification(fromUser) {
-  const notification = document.createElement('div');
-  notification.className = 'friend-request-notification';
-  
-  notification.innerHTML = `
-    <div class="friend-request-content">
-      <h4>Friend Request</h4>
-      <p>${fromUser} wants to be your friend</p>
-      <div class="friend-request-actions">
-        <button class="btn-accept" onclick="acceptFriendRequest('${fromUser}')">
-          <i class="fas fa-check"></i> Accept
-        </button>
-        <button class="btn-reject" onclick="rejectFriendRequest('${fromUser}')">
-          <i class="fas fa-times"></i> Reject
-        </button>
-      </div>
-    </div>
-  `;
-  
-  document.body.appendChild(notification);
-  
-  setTimeout(() => {
-    if (document.body.contains(notification)) {
-      notification.style.animation = 'slideOutRight 0.3s ease';
-      setTimeout(() => {
-        if (document.body.contains(notification)) {
-          document.body.removeChild(notification);
-        }
-      }, 300);
-    }
-  }, CONFIG.FRIEND_REQUEST_TIMEOUT);
-}
 
 function isUserNearBottom() {
   const messagesContainer = $id('messagesContainer');
@@ -1357,77 +1356,6 @@ function updateUserStatus(username, isOnline) {
       }
     }
   });
-}
-
-// ============================
-// Local Storage Functions
-// ============================
-
-function getFriends(username) {
-  const key = `friends_${username}`;
-  return JSON.parse(localStorage.getItem(key)) || [];
-}
-
-function saveFriend(username, friendUsername) {
-  const key = `friends_${username}`;
-  const friends = getFriends(username);
-  if (!friends.includes(friendUsername)) {
-    friends.push(friendUsername);
-    localStorage.setItem(key, JSON.stringify(friends));
-    return true;
-  }
-  return false;
-}
-
-function removeFriend(username, friendUsername) {
-  const key = `friends_${username}`;
-  let friends = getFriends(username);
-  friends = friends.filter(f => f !== friendUsername);
-  localStorage.setItem(key, JSON.stringify(friends));
-}
-
-function getPendingRequests(username) {
-  const key = `pending_requests_${username}`;
-  return JSON.parse(localStorage.getItem(key)) || [];
-}
-
-function savePendingRequest(toUser, fromUser) {
-  const key = `pending_requests_${toUser}`;
-  const requests = getPendingRequests(toUser);
-  if (!requests.includes(fromUser)) {
-    requests.push(fromUser);
-    localStorage.setItem(key, JSON.stringify(requests));
-  }
-}
-
-function removePendingRequest(username, fromUser) {
-  const key = `pending_requests_${username}`;
-  let requests = getPendingRequests(username);
-  requests = requests.filter(req => req !== fromUser);
-  localStorage.setItem(key, JSON.stringify(requests));
-}
-
-function getChatHistory(user1, user2) {
-  const key = `chat_${[user1, user2].sort().join('_')}`;
-  return JSON.parse(localStorage.getItem(key)) || [];
-}
-
-function saveChatMessage(user1, user2, message) {
-  const key = `chat_${[user1, user2].sort().join('_')}`;
-  const history = getChatHistory(user1, user2);
-  history.push(message);
-  
-  // Keep only last 1000 messages to prevent storage overflow
-  if (history.length > 1000) {
-    history.splice(0, history.length - 1000);
-  }
-  
-  localStorage.setItem(key, JSON.stringify(history));
-}
-
-function clearChatHistory(user1, user2) {
-  const key = `chat_${[user1, user2].sort().join('_')}`;
-  localStorage.setItem(key, JSON.stringify([]));
 }
 
 // ============================
@@ -1488,16 +1416,32 @@ socket.on('userOffline', (username) => {
   showNotification(`${username} is now offline`, 'info');
 });
 
+// FIXED: Double message receive issue
 socket.on('chatMessage', (data) => {
-  if (data.from === APP_STATE.currentChatWith || data.to === APP_STATE.currentChatWith) {
-    addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from === APP_STATE.currentUser);
-    saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
-      sender: data.from,
-      text: data.message,
-      time: formatTime(data.timestamp),
-      timestamp: data.timestamp
-    });
-    ensureInputVisible();
+  console.log('📥 Received message from server:', data);
+  
+  // Only process if message is for current chat
+  if ((data.from === APP_STATE.currentChatWith && data.to === APP_STATE.currentUser) ||
+      (data.from === APP_STATE.currentUser && data.to === APP_STATE.currentChatWith)) {
+    
+    // Check if message already exists to prevent duplicates
+    const existingMessages = getChatHistory(APP_STATE.currentUser, APP_STATE.currentChatWith);
+    const isDuplicate = existingMessages.some(msg => 
+      msg.timestamp === data.timestamp && msg.text === data.message
+    );
+    
+    if (!isDuplicate) {
+      addMessageToChat(data.from, data.message, formatTime(data.timestamp), data.from === APP_STATE.currentUser);
+      
+      saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
+        sender: data.from,
+        text: data.message,
+        time: formatTime(data.timestamp),
+        timestamp: data.timestamp
+      });
+      
+      ensureInputVisible();
+    }
   }
 });
 
@@ -1516,13 +1460,24 @@ socket.on('typingStop', (data) => {
 // Friend events
 socket.on('friendRequest', (data) => {
   if (data.to === APP_STATE.currentUser) {
-    showFriendRequestNotification(data.from);
+    console.log('New friend request received from:', data.from);
+    
+    // Save to pending requests
+    savePendingRequest(APP_STATE.currentUser, data.from);
+    
+    // Update UI
+    loadFriendRequests();
+    renderUsersList();
+    
+    // Show notification
+    showNotification(`New friend request from ${data.from}`, 'info');
   }
 });
 
 socket.on('friendRequestSent', (data) => {
   showNotification(`Friend request sent to ${data.to}`, 'success');
   renderUsersList();
+  loadFriendRequests();
 });
 
 socket.on('friendRequestError', (data) => {
@@ -1533,6 +1488,7 @@ socket.on('friendRequestAccepted', (data) => {
   if (data.to === APP_STATE.currentUser) {
     loadFriendsList();
     renderUsersList();
+    loadFriendRequests();
     showNotification(`${data.from} accepted your friend request!`, 'success');
   }
 });
@@ -1598,6 +1554,7 @@ function initializeChat() {
   
   loadAllUsers();
   loadFriendsList();
+  loadFriendRequests();
   
   // Request pending friend requests
   socket.emit('getPendingRequests');
@@ -1738,9 +1695,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Auth button listeners
   if ($id('loginBtn')) {
     $id('loginBtn').addEventListener('click', handleLogin);
-  }
-  if ($id('registerBtn')) {
-    $id('registerBtn').addEventListener('click', handleRegister);
   }
   if ($id('logoutBtn')) {
     $id('logoutBtn').addEventListener('click', handleLogout);
