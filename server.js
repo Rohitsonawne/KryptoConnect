@@ -1,5 +1,5 @@
 // ============================
-// KryptoConnect - Enhanced Server.js (FIXED)
+// KryptoConnect - Enhanced Server.js (ALL ISSUES FIXED)
 // ============================
 
 require('dotenv').config();
@@ -23,37 +23,40 @@ const cors = require('cors');
 const app = express();
 const server = http.createServer(app);
 app.set('trust proxy', 1);
+
 // Enhanced CORS configuration
 app.use(cors({
-  origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500"],
+  origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500", "http://127.0.0.1:5500"],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE']
 }));
 
 const io = new Server(server, {
   cors: { 
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500"],
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5500", "http://127.0.0.1:5500"],
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Security Middleware
 app.use(helmet({
-  contentSecurityPolicy: false, // Disable for development
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
 
 // Rate Limiting
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10, // Increased from 5 to 10
+  max: 10,
   message: 'Too many attempts, please try again later.'
 });
 
 const otpLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 5, // Increased from 3 to 5
+  max: 5,
   message: 'Too many OTP requests, please try again later.'
 });
 
@@ -73,9 +76,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: true, // Set to true in production with HTTPS
+    secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: 'lax'
   }
 }));
 
@@ -83,7 +87,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ============================
-// MongoDB Connection (IMPROVED)
+// MongoDB Connection
 // ============================
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/kryptoconnect';
@@ -122,7 +126,7 @@ mongoose.connection.on('disconnected', () => {
 });
 
 // ============================
-// Enhanced Schemas (UNCHANGED)
+// Enhanced Schemas
 // ============================
 
 const userSchema = new mongoose.Schema({
@@ -278,6 +282,7 @@ async function createIndexes() {
     
     await Message.collection.createIndex({ from: 1, to: 1, timestamp: -1 });
     await Friend.collection.createIndex({ user1: 1, user2: 1 });
+    await FriendRequest.collection.createIndex({ from: 1, to: 1 });
     await OTP.collection.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 600 });
     console.log('✅ Database indexes created successfully');
   } catch (error) {
@@ -293,7 +298,7 @@ setTimeout(() => {
 }, 5000);
 
 // ============================
-// File Upload Configuration (IMPROVED)
+// File Upload Configuration
 // ============================
 
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -334,7 +339,7 @@ const upload = multer({
 });
 
 // ============================
-// Passport Configuration (UNCHANGED)
+// Passport Configuration
 // ============================
 
 passport.serializeUser((user, done) => done(null, user.id));
@@ -425,7 +430,7 @@ const asyncHandler = (fn) => (req, res, next) => {
 };
 
 // ============================
-// Basic Routes (ENHANCED)
+// Basic Routes
 // ============================
 
 app.get('/', (req, res) => {
@@ -438,7 +443,8 @@ app.get('/api/health', (req, res) => {
     status: 'Server is running!',
     timestamp: new Date().toISOString(),
     database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    onlineUsers: Object.keys(onlineUsers).length
   });
 });
 
@@ -464,7 +470,7 @@ app.get('/auth/facebook/callback',
 );
 
 // ============================
-// OTP APIs (FIXED)
+// OTP APIs
 // ============================
 
 app.post('/api/send-otp', asyncHandler(async (req, res) => {
@@ -528,7 +534,6 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
   });
 }));
 
-// FIXED: Added missing verify-otp-signup endpoint
 app.post('/api/verify-otp-signup', asyncHandler(async (req, res) => {
   const { emailPhone, otp, username, password } = req.body;
 
@@ -671,12 +676,21 @@ app.post('/api/resend-otp', asyncHandler(async (req, res) => {
 }));
 
 // ============================
-// File Upload & Download APIs (FIXED)
+// File Upload & Download APIs
 // ============================
 
 app.post('/api/upload', upload.single('file'), asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  // Additional file type validation
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.txt', '.mp4', '.mp3', '.zip', '.rar'];
+  const fileExtension = path.extname(req.file.originalname).toLowerCase();
+
+  if (!allowedExtensions.includes(fileExtension)) {
+    fs.unlinkSync(req.file.path); // Delete uploaded file
+    return res.status(400).json({ error: 'File type not allowed' });
   }
 
   const fileData = {
@@ -708,7 +722,7 @@ app.get('/api/download/:filename', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================
-// Auth & User APIs (ENHANCED)
+// Auth & User APIs
 // ============================
 
 app.post('/api/register', asyncHandler(async (req, res) => {
@@ -822,13 +836,16 @@ app.get('/api/friend-requests/:username', asyncHandler(async (req, res) => {
 }));
 
 app.get('/api/friends/:username', asyncHandler(async (req, res) => {
-  const friends1 = await Friend.find({ user1: req.params.username });
-  const friends2 = await Friend.find({ user2: req.params.username });
-  
-  const allFriends = [
-    ...friends1.map(f => f.user2),
-    ...friends2.map(f => f.user1)
-  ];
+  const friends = await Friend.find({
+    $or: [
+      { user1: req.params.username },
+      { user2: req.params.username }
+    ]
+  });
+
+  const allFriends = friends.map(f => 
+    f.user1 === req.params.username ? f.user2 : f.user1
+  );
   
   res.json(allFriends);
 }));
@@ -894,7 +911,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Chat messages
+  // User login event
+  socket.on('userLogin', (username) => {
+    console.log('👤 User logged in:', username);
+    onlineUsers[socket.id] = username;
+    socket.broadcast.emit('userOnline', username);
+  });
+
+  // Chat messages - FIXED DOUBLE MESSAGES
   socket.on('chatMessage', async (data) => {
     try {
       const { from, to, message, timestamp } = data;
@@ -911,6 +935,19 @@ io.on('connection', (socket) => {
         return;
       }
 
+      // Check if message already exists to prevent duplicates
+      const existingMessage = await Message.findOne({
+        from: from,
+        to: to,
+        message: trimmedMessage,
+        timestamp: new Date(timestamp)
+      });
+
+      if (existingMessage) {
+        console.log('⚠️ Duplicate message prevented:', trimmedMessage);
+        return;
+      }
+
       const newMessage = new Message({
         from,
         to,
@@ -921,19 +958,23 @@ io.on('connection', (socket) => {
       await newMessage.save();
 
       // Send to recipient
-      const recipientSocket = Object.entries(onlineUsers).find(([_, username]) => username === to)?.[0];
+      const recipientSocket = getSocketByUsername(to);
       if (recipientSocket) {
         io.to(recipientSocket).emit('chatMessage', {
           ...data,
-          timestamp: newMessage.timestamp
+          timestamp: newMessage.timestamp,
+          id: newMessage._id // Add unique ID to prevent duplicates
         });
       }
 
-      // Also send back to sender for confirmation
+      // Also send back to sender for confirmation (with unique ID)
       socket.emit('chatMessage', {
         ...data,
-        timestamp: newMessage.timestamp
+        timestamp: newMessage.timestamp,
+        id: newMessage._id
       });
+
+      console.log(`💬 Message from ${from} to ${to}: ${trimmedMessage}`);
 
     } catch (error) {
       console.error('Chat message error:', error);
@@ -943,20 +984,20 @@ io.on('connection', (socket) => {
 
   // Typing indicators
   socket.on('typingStart', (data) => {
-    const recipientSocket = Object.entries(onlineUsers).find(([_, username]) => username === data.to)?.[0];
+    const recipientSocket = getSocketByUsername(data.to);
     if (recipientSocket) {
       io.to(recipientSocket).emit('typingStart', { from: data.from });
     }
   });
 
   socket.on('typingStop', (data) => {
-    const recipientSocket = Object.entries(onlineUsers).find(([_, username]) => username === data.to)?.[0];
+    const recipientSocket = getSocketByUsername(data.to);
     if (recipientSocket) {
       io.to(recipientSocket).emit('typingStop', { from: data.from });
     }
   });
 
-  // Friend requests
+  // Friend requests - ENHANCED
   socket.on('friendRequest', async (data) => {
     try {
       const { from, to } = data;
@@ -1011,7 +1052,7 @@ io.on('connection', (socket) => {
       await friendRequest.save();
 
       // Notify recipient
-      const toSocket = Object.entries(onlineUsers).find(([_, username]) => username === to)?.[0];
+      const toSocket = getSocketByUsername(to);
       if (toSocket) {
         io.to(toSocket).emit('friendRequest', {
           from: from,
@@ -1021,6 +1062,8 @@ io.on('connection', (socket) => {
       }
 
       socket.emit('friendRequestSent', { to: to });
+
+      console.log(`🤝 Friend request from ${from} to ${to}`);
 
     } catch (error) {
       console.error('Friend request error:', error);
@@ -1048,13 +1091,21 @@ io.on('connection', (socket) => {
       await fileMessage.save();
 
       // Send to recipient
-      const recipientSocket = Object.entries(onlineUsers).find(([_, username]) => username === fileData.to)?.[0];
+      const recipientSocket = getSocketByUsername(fileData.to);
       if (recipientSocket) {
-        io.to(recipientSocket).emit('fileUpload', fileData);
+        io.to(recipientSocket).emit('fileUpload', {
+          ...fileData,
+          id: fileMessage._id
+        });
       }
 
       // Also send back to sender
-      socket.emit('fileUpload', fileData);
+      socket.emit('fileUpload', {
+        ...fileData,
+        id: fileMessage._id
+      });
+
+      console.log(`📁 File uploaded from ${fileData.from} to ${fileData.to}: ${fileData.fileName}`);
 
     } catch (error) {
       console.error('File upload error:', error);
@@ -1062,18 +1113,26 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Friend request responses
+  // Friend request responses - IMPROVED
   socket.on('acceptFriendRequest', async (data) => {
     try {
       const { from, to } = data;
 
+      console.log('Accepting friend request:', { from, to });
+
       // Update friend request status
-      await FriendRequest.updateOne(
+      const updatedRequest = await FriendRequest.findOneAndUpdate(
         { from: from, to: to, status: 'pending' },
-        { status: 'accepted' }
+        { status: 'accepted' },
+        { new: true }
       );
 
-      // Create friendship
+      if (!updatedRequest) {
+        socket.emit('error', { message: 'Friend request not found' });
+        return;
+      }
+
+      // Create friendship (both ways)
       const friendship = new Friend({
         user1: from,
         user2: to
@@ -1082,8 +1141,8 @@ io.on('connection', (socket) => {
       await friendship.save();
 
       // Notify both users
-      const fromSocket = Object.entries(onlineUsers).find(([_, username]) => username === from)?.[0];
-      const toSocket = Object.entries(onlineUsers).find(([_, username]) => username === to)?.[0];
+      const fromSocket = getSocketByUsername(from);
+      const toSocket = getSocketByUsername(to);
 
       if (fromSocket) {
         io.to(fromSocket).emit('friendRequestAccepted', {
@@ -1099,6 +1158,8 @@ io.on('connection', (socket) => {
         });
       }
 
+      console.log(`✅ Friendship created between ${from} and ${to}`);
+
     } catch (error) {
       console.error('Accept friend request error:', error);
       socket.emit('error', { message: 'Failed to accept friend request' });
@@ -1109,18 +1170,26 @@ io.on('connection', (socket) => {
     try {
       const { from, to } = data;
 
-      await FriendRequest.updateOne(
+      const updatedRequest = await FriendRequest.findOneAndUpdate(
         { from: from, to: to, status: 'pending' },
-        { status: 'rejected' }
+        { status: 'rejected' },
+        { new: true }
       );
 
-      const fromSocket = Object.entries(onlineUsers).find(([_, username]) => username === from)?.[0];
+      if (!updatedRequest) {
+        socket.emit('error', { message: 'Friend request not found' });
+        return;
+      }
+
+      const fromSocket = getSocketByUsername(from);
       if (fromSocket) {
         io.to(fromSocket).emit('friendRequestRejected', {
           from: to,
           to: from
         });
       }
+
+      console.log(`❌ Friend request rejected from ${from} to ${to}`);
 
     } catch (error) {
       console.error('Reject friend request error:', error);
@@ -1132,14 +1201,19 @@ io.on('connection', (socket) => {
     try {
       const { from, friend } = data;
 
-      await Friend.deleteOne({
+      const result = await Friend.deleteOne({
         $or: [
           { user1: from, user2: friend },
           { user1: friend, user2: from }
         ]
       });
 
-      const friendSocket = Object.entries(onlineUsers).find(([_, username]) => username === friend)?.[0];
+      if (result.deletedCount === 0) {
+        socket.emit('error', { message: 'Friendship not found' });
+        return;
+      }
+
+      const friendSocket = getSocketByUsername(friend);
       if (friendSocket) {
         io.to(friendSocket).emit('friendRemoved', {
           from: from,
@@ -1152,6 +1226,8 @@ io.on('connection', (socket) => {
         friend: friend
       });
 
+      console.log(`🗑️ Friendship removed between ${from} and ${friend}`);
+
     } catch (error) {
       console.error('Remove friend error:', error);
       socket.emit('error', { message: 'Failed to remove friend' });
@@ -1163,10 +1239,22 @@ io.on('connection', (socket) => {
     if (username) {
       delete onlineUsers[socket.id];
       socket.broadcast.emit('userOffline', username);
-      console.log(`🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online`);
+      
+      // Update last seen in database
+      User.findOneAndUpdate(
+        { username: username },
+        { lastSeen: new Date() }
+      ).catch(console.error);
+      
+      console.log(`🔴 ${username} disconnected - ${Object.keys(onlineUsers).length} users online - Reason: ${reason}`);
     }
   });
 });
+
+// Helper function to get socket by username
+function getSocketByUsername(username) {
+  return Object.entries(onlineUsers).find(([_, uname]) => uname === username)?.[0];
+}
 
 // ============================
 // Legal Pages (Required for OAuth)
@@ -1267,6 +1355,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('📍 Environment:', process.env.NODE_ENV || 'development');
   console.log('📍 MongoDB:', mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected');
   console.log('📍 Health Check: http://localhost:' + PORT + '/api/health');
+  console.log('📍 Uploads Directory:', uploadsDir);
 });
 
 process.on('unhandledRejection', (err) => {
