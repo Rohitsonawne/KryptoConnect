@@ -921,7 +921,9 @@ io.on('connection', (socket) => {
   // Chat messages - FIXED DOUBLE MESSAGES
   socket.on('chatMessage', async (data) => {
     try {
-      const { from, to, message, timestamp } = data;
+      const { from, to, message, timestamp, messageId } = data;
+
+      console.log('Processing message:', { from, to, message, messageId });
 
       if (!from || !to || !message) {
         socket.emit('error', { message: 'Invalid message data' });
@@ -935,19 +937,23 @@ io.on('connection', (socket) => {
         return;
       }
 
-      // Check if message already exists to prevent duplicates
-      const existingMessage = await Message.findOne({
+      // Check for duplicate messages in database (within 2 seconds)
+      const duplicateMessage = await Message.findOne({
         from: from,
         to: to,
         message: trimmedMessage,
-        timestamp: new Date(timestamp)
+        timestamp: {
+          $gte: new Date(timestamp - 2000),
+          $lte: new Date(timestamp + 2000)
+        }
       });
 
-      if (existingMessage) {
-        console.log('⚠️ Duplicate message prevented:', trimmedMessage);
+      if (duplicateMessage) {
+        console.log('⚠️ Duplicate message prevented in database');
         return;
       }
 
+      // Create new message
       const newMessage = new Message({
         from,
         to,
@@ -957,27 +963,30 @@ io.on('connection', (socket) => {
 
       await newMessage.save();
 
+      console.log(`✅ Message saved to database: ${from} → ${to}: ${trimmedMessage}`);
+
+      // Prepare response data
+      const responseData = {
+        from,
+        to,
+        message: trimmedMessage,
+        timestamp: newMessage.timestamp,
+        messageId: messageId || newMessage._id.toString()
+      };
+
       // Send to recipient
       const recipientSocket = getSocketByUsername(to);
       if (recipientSocket) {
-        io.to(recipientSocket).emit('chatMessage', {
-          ...data,
-          timestamp: newMessage.timestamp,
-          id: newMessage._id // Add unique ID to prevent duplicates
-        });
+        io.to(recipientSocket).emit('chatMessage', responseData);
+        console.log(`📤 Message sent to recipient: ${to}`);
       }
 
-      // Also send back to sender for confirmation (with unique ID)
-      socket.emit('chatMessage', {
-        ...data,
-        timestamp: newMessage.timestamp,
-        id: newMessage._id
-      });
-
-      console.log(`💬 Message from ${from} to ${to}: ${trimmedMessage}`);
+      // Send confirmation back to sender
+      socket.emit('chatMessage', responseData);
+      console.log(`📤 Confirmation sent to sender: ${from}`);
 
     } catch (error) {
-      console.error('Chat message error:', error);
+      console.error('❌ Chat message error:', error);
       socket.emit('error', { message: 'Failed to send message' });
     }
   });
@@ -997,10 +1006,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Friend requests - ENHANCED
+  // Friend requests - FIXED (NO DOUBLE FRIEND REQUESTS)
   socket.on('friendRequest', async (data) => {
     try {
       const { from, to } = data;
+
+      console.log('Processing friend request:', { from, to });
 
       // Check if users exist
       const fromUser = await User.findOne({ username: from });
@@ -1025,7 +1036,7 @@ io.on('connection', (socket) => {
       });
 
       if (existingFriendship) {
-        socket.emit('friendRequestError', { error: 'Already friends' });
+        socket.emit('friendRequestError', { error: 'Already friends with this user' });
         return;
       }
 
@@ -1038,7 +1049,7 @@ io.on('connection', (socket) => {
       });
 
       if (existingRequest) {
-        socket.emit('friendRequestError', { error: 'Request already sent or pending' });
+        socket.emit('friendRequestError', { error: 'Friend request already sent or pending' });
         return;
       }
 
@@ -1061,9 +1072,10 @@ io.on('connection', (socket) => {
         });
       }
 
+      // Send success to sender
       socket.emit('friendRequestSent', { to: to });
 
-      console.log(`🤝 Friend request from ${from} to ${to}`);
+      console.log(`✅ Friend request created from ${from} to ${to}`);
 
     } catch (error) {
       console.error('Friend request error:', error);
@@ -1128,17 +1140,19 @@ io.on('connection', (socket) => {
       );
 
       if (!updatedRequest) {
-        socket.emit('error', { message: 'Friend request not found' });
+        socket.emit('error', { message: 'Friend request not found or already processed' });
         return;
       }
 
-      // Create friendship (both ways)
+      // Create friendship (both directions)
       const friendship = new Friend({
         user1: from,
         user2: to
       });
 
       await friendship.save();
+
+      console.log(`✅ Friendship created between ${from} and ${to}`);
 
       // Notify both users
       const fromSocket = getSocketByUsername(from);
@@ -1157,8 +1171,6 @@ io.on('connection', (socket) => {
           to: to
         });
       }
-
-      console.log(`✅ Friendship created between ${from} and ${to}`);
 
     } catch (error) {
       console.error('Accept friend request error:', error);
