@@ -1,5 +1,5 @@
 // ============================
-// KryptoConnect - Enhanced Client.js (ALL ISSUES FIXED)
+// KryptoConnect - COMPLETELY FIXED Client.js
 // ============================
 
 // Improved Socket connection with better error handling
@@ -48,7 +48,9 @@ const APP_STATE = {
   socketConnected: false,
   isSending: false,
   sentMessageIds: new Set(),
-  lastMessageTimestamp: 0
+  uploadedFiles: new Set(),
+  lastMessageTimestamp: 0,
+  friendRequestInProgress: new Set()
 };
 
 const CONFIG = {
@@ -224,13 +226,22 @@ function getChatHistory(user1, user2) {
 function saveChatMessage(user1, user2, message) {
   const key = `chat_${[user1, user2].sort().join('_')}`;
   const history = getChatHistory(user1, user2);
-  history.push(message);
   
-  if (history.length > 1000) {
-    history.splice(0, history.length - 1000);
+  // Check for duplicate message
+  const isDuplicate = history.some(msg => 
+    msg.messageId === message.messageId || 
+    (Math.abs(msg.timestamp - message.timestamp) < 1000 && msg.text === message.text)
+  );
+  
+  if (!isDuplicate) {
+    history.push(message);
+    
+    if (history.length > 1000) {
+      history.splice(0, history.length - 1000);
+    }
+    
+    localStorage.setItem(key, JSON.stringify(history));
   }
-  
-  localStorage.setItem(key, JSON.stringify(history));
 }
 
 function clearChatHistory(user1, user2) {
@@ -582,7 +593,7 @@ function handleLogout() {
 }
 
 // ============================
-// Chat System Functions (FIXED DOUBLE MESSAGES)
+// Chat System Functions (COMPLETELY FIXED)
 // ============================
 
 async function loadAllUsers() {
@@ -725,7 +736,7 @@ function loadFriendsList() {
   });
 }
 
-// FRIEND REQUEST SYSTEM (FIXED)
+// FIXED: Friend Request System
 function loadFriendRequests() {
   const requestsList = $id('friendRequestsList');
   const requestCount = $id('requestCount');
@@ -767,10 +778,17 @@ function loadFriendRequests() {
   });
 }
 
-// FIXED: Friend Request Function
+// FIXED: Friend Request Function (No Duplicates)
 function sendFriendRequest(fromUser, toUser) {
   if (!APP_STATE.socketConnected) {
     showNotification('Connection lost. Please try again.', 'error');
+    return;
+  }
+
+  // Check if request already in progress
+  const requestKey = `${fromUser}_${toUser}`;
+  if (APP_STATE.friendRequestInProgress.has(requestKey)) {
+    console.log('Friend request already in progress:', requestKey);
     return;
   }
 
@@ -790,6 +808,9 @@ function sendFriendRequest(fromUser, toUser) {
     return;
   }
 
+  // Mark request as in progress
+  APP_STATE.friendRequestInProgress.add(requestKey);
+  
   socket.emit('friendRequest', { 
     from: fromUser, 
     to: toUser 
@@ -801,6 +822,11 @@ function sendFriendRequest(fromUser, toUser) {
   loadFriendRequests();
   
   showNotification(`Friend request sent to ${toUser}`, 'success');
+
+  // Remove from in progress after timeout
+  setTimeout(() => {
+    APP_STATE.friendRequestInProgress.delete(requestKey);
+  }, 3000);
 }
 
 // Global functions for friend requests
@@ -909,7 +935,7 @@ function loadChatHistory(username) {
       if (message.isFile) {
         addFileMessageToChat(message.fileData, message.sender === APP_STATE.currentUser);
       } else {
-        addMessageToChat(message.sender, message.text, formatTime(message.timestamp), message.sender === APP_STATE.currentUser);
+        addMessageToChat(message.sender, message.text, formatTime(message.timestamp), message.sender === APP_STATE.currentUser, message.messageId);
       }
     });
   } else {
@@ -936,21 +962,21 @@ function addMessageToChat(sender, text, time, isSender, messageId = null) {
   const noMessagesElement = messagesContainer.querySelector('.no-chat-selected');
   if (noMessagesElement) noMessagesElement.remove();
 
+  // Generate message ID if not provided
+  if (!messageId) {
+    messageId = `${sender}_${APP_STATE.currentChatWith}_${Date.now()}`;
+  }
+
   // Check if message already exists in DOM
-  if (messageId) {
-    const existingMessage = messagesContainer.querySelector(`[data-message-id="${messageId}"]`);
-    if (existingMessage) {
-      console.log('⚠️ Message already in DOM, skipping:', messageId);
-      return;
-    }
+  const existingMessage = messagesContainer.querySelector(`[data-message-id="${messageId}"]`);
+  if (existingMessage) {
+    console.log('⚠️ Message already in DOM, skipping:', messageId);
+    return;
   }
 
   const messageElement = document.createElement('div');
   messageElement.className = `message ${isSender ? 'sent' : 'received'}`;
-  
-  if (messageId) {
-    messageElement.setAttribute('data-message-id', messageId);
-  }
+  messageElement.setAttribute('data-message-id', messageId);
 
   messageElement.innerHTML = `
     ${!isSender ? `<div class="message-sender">${escapeHTML(sender)}</div>` : '<div class="message-sender">You</div>'}
@@ -996,28 +1022,36 @@ function sendMessage() {
     return;
   }
 
-  // Prevent rapid sending
-  const now = Date.now();
-  if (now - APP_STATE.lastMessageTimestamp < 1000) {
-    showNotification('Please wait before sending another message', 'warning');
+  // Generate unique message ID FIRST
+  const timestamp = Date.now();
+  const messageId = `${APP_STATE.currentUser}_${APP_STATE.currentChatWith}_${timestamp}`;
+  
+  // Check if already sent this message (PREVENT DUPLICATE)
+  if (APP_STATE.sentMessageIds.has(messageId)) {
+    console.log('⚠️ Duplicate message prevented:', messageId);
     return;
   }
 
   APP_STATE.isSending = true;
-  APP_STATE.lastMessageTimestamp = now;
+  APP_STATE.lastMessageTimestamp = timestamp;
   
-  const timestamp = Date.now();
-  const time = formatTime(timestamp);
-
-  // Generate unique message ID
-  const messageId = `${APP_STATE.currentUser}_${APP_STATE.currentChatWith}_${timestamp}`;
-  
-  // Add to sent messages to prevent duplicates
+  // ADD TO SENT MESSAGES IMMEDIATELY
   APP_STATE.sentMessageIds.add(messageId);
+
+  const time = formatTime(timestamp);
 
   try {
     // Show message locally immediately (OPTIMISTIC UI)
     addMessageToChat(APP_STATE.currentUser, text, time, true, messageId);
+
+    // Save to local storage immediately
+    saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
+      sender: APP_STATE.currentUser,
+      text: text,
+      time: time,
+      timestamp: timestamp,
+      messageId: messageId
+    });
 
     // Send to server
     socket.emit('chatMessage', { 
@@ -1048,11 +1082,22 @@ function sendMessage() {
     
     // Remove from sent messages if failed
     APP_STATE.sentMessageIds.delete(messageId);
+    
+    // Remove from UI if failed
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+      messageElement.remove();
+    }
   } finally {
-    // Reset sending flag after a short delay
+    // Clean up sent message ID after 5 seconds to prevent memory leak
+    setTimeout(() => {
+      APP_STATE.sentMessageIds.delete(messageId);
+    }, 5000);
+    
+    // Reset sending flag
     setTimeout(() => {
       APP_STATE.isSending = false;
-    }, 500);
+    }, 1000);
   }
 }
 
@@ -1084,7 +1129,7 @@ function handleTyping() {
 }
 
 // ============================
-// File Upload Functions
+// File Upload Functions (FIXED)
 // ============================
 
 function toggleFileUpload() {
@@ -1181,6 +1226,7 @@ function clearFileSelection() {
   if ($id('uploadProgressBar')) $id('uploadProgressBar').style.width = '0%';
 }
 
+// FIXED: Upload File Function (No Duplicates)
 async function uploadFile() {
   if (!APP_STATE.selectedFile || !APP_STATE.currentChatWith) {
     showNotification('Please select a file and a friend to chat with', 'error');
@@ -1195,8 +1241,24 @@ async function uploadFile() {
   const uploadBtn = $id('uploadBtn');
   if (!uploadBtn) return;
   
+  // Prevent multiple uploads
+  if (uploadBtn.disabled) {
+    console.log('⚠️ File upload already in progress');
+    return;
+  }
+  
   uploadBtn.disabled = true;
   uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+  // Generate unique file ID
+  const fileId = `file_${APP_STATE.currentUser}_${APP_STATE.currentChatWith}_${Date.now()}`;
+  
+  // Track uploaded files
+  if (APP_STATE.uploadedFiles.has(fileId)) {
+    console.log('⚠️ File already uploaded:', fileId);
+    return;
+  }
+  APP_STATE.uploadedFiles.add(fileId);
 
   simulateUploadProgress();
 
@@ -1220,18 +1282,23 @@ async function uploadFile() {
       fileData.from = APP_STATE.currentUser;
       fileData.to = APP_STATE.currentChatWith;
       fileData.timestamp = Date.now();
+      fileData.fileId = fileId; // Add unique file ID
 
+      // Send via socket
       socket.emit('fileUpload', fileData);
 
+      // Add to UI
       addFileMessageToChat(fileData, true);
 
+      // Save to local storage
       saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
         sender: APP_STATE.currentUser,
         text: `[FILE] ${APP_STATE.selectedFile.name}`,
         time: formatTime(fileData.timestamp),
         timestamp: fileData.timestamp,
         isFile: true,
-        fileData: fileData
+        fileData: fileData,
+        messageId: fileId
       });
 
       showNotification(`File "${APP_STATE.selectedFile.name}" uploaded successfully`, 'success');
@@ -1243,6 +1310,7 @@ async function uploadFile() {
   } catch (error) {
     console.error('Upload error:', error);
     showNotification('File upload failed: ' + error.message, 'error');
+    APP_STATE.uploadedFiles.delete(fileId);
   } finally {
     uploadBtn.disabled = false;
     uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload';
@@ -1265,6 +1333,7 @@ function simulateUploadProgress() {
   }, 200);
 }
 
+// FIXED: Add File Message to Chat (No Duplicates)
 function addFileMessageToChat(fileData, isSender) {
   const messagesContainer = $id('messagesContainer');
   if (!messagesContainer) return;
@@ -1272,9 +1341,18 @@ function addFileMessageToChat(fileData, isSender) {
   const noMessagesElement = messagesContainer.querySelector('.no-chat-selected');
   if (noMessagesElement) noMessagesElement.remove();
 
+  // Check if file already exists in DOM
+  const fileId = fileData.fileId || `file_${fileData.from}_${fileData.to}_${fileData.timestamp}`;
+  const existingFile = messagesContainer.querySelector(`[data-file-id="${fileId}"]`);
+  if (existingFile) {
+    console.log('⚠️ File message already in DOM, skipping:', fileId);
+    return;
+  }
+
   const fileSize = (fileData.fileSize / (1024 * 1024)).toFixed(2);
   const fileElement = document.createElement('div');
   fileElement.className = `file-message ${isSender ? 'sent' : 'received'}`;
+  fileElement.setAttribute('data-file-id', fileId);
 
   fileElement.innerHTML = `
     ${!isSender ? `<div class="message-sender">${escapeHTML(fileData.from)}</div>` : '<div class="message-sender">You</div>'}
@@ -1345,10 +1423,7 @@ function sendFriendRequestHandler() {
     return;
   }
 
-  socket.emit('friendRequest', { 
-    from: APP_STATE.currentUser, 
-    to: username 
-  });
+  sendFriendRequest(APP_STATE.currentUser, username);
   
   if (friendError) friendError.textContent = '';
   if (friendUsername) friendUsername.value = '';
@@ -1414,7 +1489,7 @@ function updateUserStatus(username, isOnline) {
 }
 
 // ============================
-// Socket Event Handlers (ENHANCED)
+// Socket Event Handlers (FIXED)
 // ============================
 
 socket.on('connect', () => {
@@ -1492,7 +1567,8 @@ socket.on('chatMessage', (data) => {
     // Check local storage for duplicates
     const existingMessages = getChatHistory(APP_STATE.currentUser, APP_STATE.currentChatWith);
     const isDuplicate = existingMessages.some(msg => 
-      Math.abs(msg.timestamp - data.timestamp) < 1000 && msg.text === data.message
+      msg.messageId === receivedMessageId || 
+      (Math.abs(msg.timestamp - data.timestamp) < 1000 && msg.text === data.message)
     );
 
     if (isDuplicate) {
@@ -1530,7 +1606,7 @@ socket.on('typingStop', (data) => {
   }
 });
 
-// Friend events - ADD THESE NEW EVENTS
+// Friend events
 socket.on('friendRequest', (data) => {
   if (data.to === APP_STATE.currentUser) {
     console.log('New friend request received from:', data.from);
@@ -1547,7 +1623,6 @@ socket.on('friendRequest', (data) => {
   }
 });
 
-// ADD THESE NEW SOCKET EVENTS:
 socket.on('friendRequestSent', (data) => {
   console.log('Friend request sent successfully:', data);
   showNotification(`Friend request sent to ${data.to}`, 'success');
@@ -1567,6 +1642,7 @@ socket.on('friendRequestError', (data) => {
 
 socket.on('friendRequestAccepted', (data) => {
   if (data.to === APP_STATE.currentUser) {
+    console.log('Friend request accepted:', data);
     loadFriendsList();
     renderUsersList();
     loadFriendRequests();
@@ -1575,19 +1651,30 @@ socket.on('friendRequestAccepted', (data) => {
 });
 
 socket.on('friendRequestRejected', (data) => {
+  console.log('Friend request rejected:', data);
   showNotification(`${data.from} rejected your friend request`, 'info');
 });
 
 socket.on('friendRemoved', (data) => {
+  console.log('Friend removed:', data);
   showNotification(`${data.from} removed you from friends`, 'info');
   loadFriendsList();
   renderUsersList();
 });
 
-// File events
+// File events - FIXED
 socket.on('fileUpload', (fileData) => {
   if ((fileData.to === APP_STATE.currentUser && fileData.from === APP_STATE.currentChatWith) ||
       (fileData.from === APP_STATE.currentUser && fileData.to === APP_STATE.currentChatWith)) {
+    
+    // Check for duplicate files
+    const fileId = fileData.fileId || `file_${fileData.from}_${fileData.to}_${fileData.timestamp}`;
+    if (APP_STATE.uploadedFiles.has(fileId)) {
+      console.log('⚠️ Duplicate file ignored:', fileId);
+      APP_STATE.uploadedFiles.delete(fileId);
+      return;
+    }
+
     addFileMessageToChat(fileData, fileData.from === APP_STATE.currentUser);
     saveChatMessage(APP_STATE.currentUser, APP_STATE.currentChatWith, {
       sender: fileData.from,
@@ -1595,7 +1682,8 @@ socket.on('fileUpload', (fileData) => {
       time: formatTime(fileData.timestamp),
       timestamp: fileData.timestamp,
       isFile: true,
-      fileData: fileData
+      fileData: fileData,
+      messageId: fileId
     });
     ensureInputVisible();
   }
@@ -1613,6 +1701,87 @@ socket.on('error', (data) => {
   console.error('Socket error:', data);
   showNotification(data.message || 'An error occurred', 'error');
 });
+
+// ============================
+// Forgot Password Functionality
+// ============================
+
+function showForgotPassword() {
+  window.location.href = 'forgot.html';
+}
+
+async function handleForgotPassword() {
+  const emailPhone = ($id('forgotEmailPhone')?.value || '').trim();
+  const forgotError = $id('forgotError');
+
+  if (!emailPhone) {
+    if (forgotError) forgotError.textContent = 'Please enter your email or phone number';
+    return;
+  }
+
+  if (!validateEmailOrPhone(emailPhone)) {
+    if (forgotError) forgotError.textContent = 'Please enter a valid email or phone number';
+    return;
+  }
+
+  try {
+    const forgotBtn = $id('forgotBtn');
+    if (forgotBtn) {
+      forgotBtn.disabled = true;
+      forgotBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    }
+
+    const response = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        emailPhone: emailPhone,
+        type: 'reset'
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (forgotError) forgotError.textContent = data.error || 'Failed to send reset code';
+      return;
+    }
+
+    if (data.success) {
+      APP_STATE.currentEmailPhone = emailPhone;
+      
+      // Show OTP verification step
+      $id('forgotStep1').style.display = 'none';
+      $id('forgotStep2').style.display = 'block';
+      $id('otpSentToForgot').textContent = maskEmailPhone(emailPhone);
+      
+      if (data.debugOtp) {
+        console.log('🔐 Reset OTP:', data.debugOtp);
+        showNotification(`Reset OTP: ${data.debugOtp}`, 'info');
+      }
+      
+      startOtpTimer();
+
+      if (forgotError) forgotError.textContent = '';
+      showNotification('Reset code sent successfully!', 'success');
+    } else {
+      if (forgotError) forgotError.textContent = data.error || 'Failed to send reset code';
+    }
+
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    if (forgotError) forgotError.textContent = 'Network error. Please check your connection.';
+    showNotification('Network error. Please try again.', 'error');
+  } finally {
+    const forgotBtn = $id('forgotBtn');
+    if (forgotBtn) {
+      forgotBtn.disabled = false;
+      forgotBtn.innerHTML = 'Send Reset Code';
+    }
+  }
+}
 
 // ============================
 // Initialization Functions
@@ -1726,6 +1895,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // Initialize forgot password page
+  if (isForgot) {
+    const forgotBtn = $id('forgotBtn');
+    if (forgotBtn) {
+      forgotBtn.addEventListener('click', handleForgotPassword);
+    }
+    
+    const backToLogin = $id('backToLogin');
+    if (backToLogin) {
+      backToLogin.addEventListener('click', () => {
+        window.location.href = 'login.html';
+      });
+    }
+  }
+
   // Initialize event listeners for chat page
   if (isIndex && APP_STATE.currentUser) {
     const messageInput = $id('messageInput');
@@ -1779,6 +1963,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   if ($id('logoutBtn')) {
     $id('logoutBtn').addEventListener('click', handleLogout);
+  }
+
+  // Forgot password link
+  const forgotPasswordLink = $id('forgotPasswordLink');
+  if (forgotPasswordLink) {
+    forgotPasswordLink.addEventListener('click', showForgotPassword);
   }
 
   console.log('🚀 KryptoConnect Client Initialized');
