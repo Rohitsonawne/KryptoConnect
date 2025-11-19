@@ -131,7 +131,7 @@ mongoose.connection.on('disconnected', () => {
 // Email Configuration
 // ============================
 
-const emailTransporter = nodemailer.createTransporter({
+const emailTransporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
