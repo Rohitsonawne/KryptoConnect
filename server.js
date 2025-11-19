@@ -131,6 +131,10 @@ mongoose.connection.on('disconnected', () => {
 // Email Configuration
 // ============================
 
+// ============================
+// Email Configuration
+// ============================
+
 const emailTransporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -148,16 +152,16 @@ emailTransporter.verify((error, success) => {
   }
 });
 
-// Email sending function
+// Email sending function (SendGrid)
 async function sendOTPEmail(email, otp, type) {
   try {
     const typeText = type === 'signup' ? 'Account Verification' : 
                     type === 'reset' ? 'Password Reset' : 'Login Verification';
 
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: 'noreply@kryptoconnect.com',  // ✅ CORRECT - SendGrid verified sender
       to: email,
-      subject: `KryptoConnect Verification Code - ${otp}`,
+      subject: `KryptoConnect Verification - ${otp}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #00ffcc, #00ccff); padding: 20px; text-align: center; color: white;">
@@ -171,18 +175,17 @@ async function sendOTPEmail(email, otp, type) {
               ${otp}
             </div>
             <p>This code will expire in 10 minutes.</p>
-            <p>If you didn't request this code, please ignore this email.</p>
           </div>
         </div>
       `
     };
 
     await emailTransporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent to: ${email}`);
+    console.log(`✅ OTP email sent via SendGrid to: ${email}`);
     return true;
     
   } catch (error) {
-    console.error('❌ Email sending failed:', error.message);
+    console.error('❌ SendGrid email failed:', error.message);
     return false;
   }
 }
