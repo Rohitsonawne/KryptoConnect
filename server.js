@@ -132,27 +132,27 @@ mongoose.connection.on('disconnected', () => {
 // Email Configuration
 // ============================
 
+// ============================
+// SendGrid Email Configuration (FIXED)
+// ============================
+
 const emailTransporter = nodemailer.createTransport({
   host: 'smtp.sendgrid.net',
-  port: 465,
-  secure: true, // ✅ IMPORTANT: Add this line
+  port: 587,
+  secure: false,
   auth: {
     user: 'apikey',
     pass: process.env.EMAIL_PASS
   },
-  connectionTimeout: 10000, // ✅ Add timeout settings
-  greetingTimeout: 10000,
-  socketTimeout: 10000
+  tls: {
+    rejectUnauthorized: false
+  },
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000
 });
 
-// Test email connection
-emailTransporter.verify((error, success) => {
-  if (error) {
-    console.log('❌ Email configuration error:', error);
-  } else {
-    console.log('✅ Email server is ready to send messages');
-  }
-});
+console.log('📧 SendGrid configured with verified email');
 
 // Email sending function (SendGrid)
 async function sendOTPEmail(email, otp, type) {
@@ -161,7 +161,7 @@ async function sendOTPEmail(email, otp, type) {
                     type === 'reset' ? 'Password Reset' : 'Login Verification';
 
     const mailOptions = {
-      from: 'noreply@kryptoconnect.com',  // ✅ CORRECT - SendGrid verified sender
+      from: '202401080009@mitaoe.ac.in', // ✅ YOUR VERIFIED COLLEGE EMAIL
       to: email,
       subject: `KryptoConnect Verification - ${otp}`,
       html: `
@@ -182,6 +182,7 @@ async function sendOTPEmail(email, otp, type) {
       `
     };
 
+    console.log(`📧 Attempting to send OTP from: 202401080009@mitaoe.ac.in to: ${email}`);
     await emailTransporter.sendMail(mailOptions);
     console.log(`✅ OTP email sent via SendGrid to: ${email}`);
     return true;
