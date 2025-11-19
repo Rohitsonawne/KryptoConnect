@@ -140,20 +140,39 @@ mongoose.connection.on('disconnected', () => {
 // SendGrid Email Configuration (DIRECT API)
 // ============================
 
-const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey(process.env.EMAIL_PASS);
+// ============================
+// SendGrid Email Configuration (FINAL FIX)
+// ============================
 
-console.log('📧 SendGrid API configured');
+const sgMail = require('@sendgrid/mail');
+
+// DEBUG: Check API Key
+console.log('📧 SendGrid API Key length:', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 'MISSING');
+console.log('📧 SendGrid API Key starts with:', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.substring(0, 5) : 'MISSING');
+
+// Set API Key properly
+if (process.env.EMAIL_PASS && process.env.EMAIL_PASS.startsWith('SG.')) {
+  sgMail.setApiKey(process.env.EMAIL_PASS.trim());
+  console.log('📧 SendGrid API configured successfully');
+} else {
+  console.log('❌ Invalid SendGrid API Key');
+}
 
 // Email sending function (SendGrid API)
 async function sendOTPEmail(email, otp, type) {
   try {
+    // Check if API key is properly set
+    if (!process.env.EMAIL_PASS || !process.env.EMAIL_PASS.startsWith('SG.')) {
+      console.log('❌ SendGrid API Key not configured properly');
+      return false;
+    }
+
     const typeText = type === 'signup' ? 'Account Verification' : 
                     type === 'reset' ? 'Password Reset' : 'Login Verification';
 
     const msg = {
       to: email,
-      from: '202401080009@mitaoe.ac.in', // Your verified email
+      from: '202401080009@mitaoe.ac.in',
       subject: `KryptoConnect Verification - ${otp}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
@@ -174,12 +193,20 @@ async function sendOTPEmail(email, otp, type) {
     };
 
     console.log(`📧 Attempting to send OTP via SendGrid API to: ${email}`);
-    await sgMail.send(msg);
+    
+    // Send email
+    const result = await sgMail.send(msg);
     console.log(`✅ OTP email sent via SendGrid API to: ${email}`);
+    console.log(`✅ SendGrid Response:`, result[0]?.statusCode);
+    
     return true;
     
   } catch (error) {
-    console.error('❌ SendGrid API failed:', error.response?.body || error.message);
+    console.error('❌ SendGrid API failed:', error.message);
+    if (error.response) {
+      console.error('❌ SendGrid Response Body:', error.response.body);
+      console.error('❌ SendGrid Response Headers:', error.response.headers);
+    }
     return false;
   }
 }
