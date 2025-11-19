@@ -135,7 +135,7 @@ mongoose.connection.on('disconnected', () => {
 const emailTransporter = nodemailer.createTransport({
   host: 'smtp.sendgrid.net',
   port: 465,
-  secure: false, // ✅ IMPORTANT: Add this line
+  secure: true, // ✅ IMPORTANT: Add this line
   auth: {
     user: 'apikey',
     pass: process.env.EMAIL_PASS
