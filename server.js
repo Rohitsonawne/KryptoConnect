@@ -19,6 +19,7 @@ const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const crypto = require('crypto');
 const cors = require('cors');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const server = http.createServer(app);
@@ -125,6 +126,66 @@ mongoose.connection.on('disconnected', () => {
   console.log('📊 MongoDB event disconnected');
 });
 
+
+// ============================
+// Email Configuration
+// ============================
+
+const emailTransporter = nodemailer.createTransporter({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// Test email connection
+emailTransporter.verify((error, success) => {
+  if (error) {
+    console.log('❌ Email configuration error:', error);
+  } else {
+    console.log('✅ Email server is ready to send messages');
+  }
+});
+
+// Email sending function
+async function sendOTPEmail(email, otp, type) {
+  try {
+    const typeText = type === 'signup' ? 'Account Verification' : 
+                    type === 'reset' ? 'Password Reset' : 'Login Verification';
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `KryptoConnect Verification Code - ${otp}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #00ffcc, #00ccff); padding: 20px; text-align: center; color: white;">
+            <h1>KryptoConnect</h1>
+            <p>Secure Crypto Chat</p>
+          </div>
+          <div style="padding: 20px; background: white;">
+            <h2>${typeText}</h2>
+            <p>Your verification code is:</p>
+            <div style="font-size: 32px; font-weight: bold; color: #00ffcc; text-align: center; margin: 20px 0; letter-spacing: 5px;">
+              ${otp}
+            </div>
+            <p>This code will expire in 10 minutes.</p>
+            <p>If you didn't request this code, please ignore this email.</p>
+          </div>
+        </div>
+      `
+    };
+
+    await emailTransporter.sendMail(mailOptions);
+    console.log(`✅ OTP email sent to: ${email}`);
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Email sending failed:', error.message);
+    return false;
+  }
+}
 // ============================
 // Enhanced Schemas
 // ============================
@@ -531,14 +592,20 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
 
   await otpRecord.save();
 
+  // ✅ NEW: Send OTP via email if it's an email address
+  let emailSent = false;
+  if (validateEmail(emailPhone)) {
+    emailSent = await sendOTPEmail(emailPhone, otp, type);
+  }
+
   console.log(`📧 OTP for ${emailPhone} (${type}): ${otp}`);
 
-  // In production, you would send the OTP via email/SMS here
-  // For now, we'll just return it in development
+  // ✅ UPDATED: Return email status
   res.json({ 
     success: true,
-    message: 'Verification code sent successfully',
-    debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp
+    message: emailSent ? 'Verification code sent to email' : 'Verification code sent successfully',
+    debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp,
+    method: emailSent ? 'email' : 'console'
   });
 }));
 
@@ -674,12 +741,20 @@ app.post('/api/resend-otp', asyncHandler(async (req, res) => {
 
   await otpRecord.save();
 
+  // ✅ NEW: Send OTP via email if it's an email address
+  let emailSent = false;
+  if (validateEmail(emailPhone)) {
+    emailSent = await sendOTPEmail(emailPhone, otp, type);
+  }
+
   console.log(`📧 New OTP for ${emailPhone} (${type}): ${otp}`);
 
+  // ✅ UPDATED: Return email status
   res.json({ 
     success: true,
-    message: 'Verification code sent successfully',
-    debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp
+    message: emailSent ? 'Verification code sent to email' : 'Verification code sent successfully',
+    debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp,
+    method: emailSent ? 'email' : 'console'
   });
 }));
 
