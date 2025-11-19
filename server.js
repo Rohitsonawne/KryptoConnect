@@ -136,33 +136,24 @@ mongoose.connection.on('disconnected', () => {
 // SendGrid Email Configuration (FIXED)
 // ============================
 
-const emailTransporter = nodemailer.createTransport({
-  host: 'smtp.sendgrid.net',
-  port: 587,
-  secure: false,
-  auth: {
-    user: 'apikey',
-    pass: process.env.EMAIL_PASS
-  },
-  tls: {
-    rejectUnauthorized: false
-  },
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000
-});
+// ============================
+// SendGrid Email Configuration (DIRECT API)
+// ============================
 
-console.log('📧 SendGrid configured with verified email');
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.EMAIL_PASS);
 
-// Email sending function (SendGrid)
+console.log('📧 SendGrid API configured');
+
+// Email sending function (SendGrid API)
 async function sendOTPEmail(email, otp, type) {
   try {
     const typeText = type === 'signup' ? 'Account Verification' : 
                     type === 'reset' ? 'Password Reset' : 'Login Verification';
 
-    const mailOptions = {
-      from: '202401080009@mitaoe.ac.in', // ✅ YOUR VERIFIED COLLEGE EMAIL
+    const msg = {
       to: email,
+      from: '202401080009@mitaoe.ac.in', // Your verified email
       subject: `KryptoConnect Verification - ${otp}`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
@@ -182,13 +173,13 @@ async function sendOTPEmail(email, otp, type) {
       `
     };
 
-    console.log(`📧 Attempting to send OTP from: 202401080009@mitaoe.ac.in to: ${email}`);
-    await emailTransporter.sendMail(mailOptions);
-    console.log(`✅ OTP email sent via SendGrid to: ${email}`);
+    console.log(`📧 Attempting to send OTP via SendGrid API to: ${email}`);
+    await sgMail.send(msg);
+    console.log(`✅ OTP email sent via SendGrid API to: ${email}`);
     return true;
     
   } catch (error) {
-    console.error('❌ SendGrid email failed:', error.message);
+    console.error('❌ SendGrid API failed:', error.response?.body || error.message);
     return false;
   }
 }
