@@ -127,18 +127,16 @@ mongoose.connection.on('disconnected', () => {
 });
 
 
-// ============================
-// Email Configuration
-// ============================
 
 // ============================
 // Email Configuration
 // ============================
 
 const emailTransporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.sendgrid.net',
+  port: 587,
   auth: {
-    user: process.env.EMAIL_USER,
+    user: 'apikey',
     pass: process.env.EMAIL_PASS
   }
 });
