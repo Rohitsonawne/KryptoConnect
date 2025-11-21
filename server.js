@@ -144,6 +144,54 @@ mongoose.connection.on('disconnected', () => {
 // ============================
 
 const sgMail = require('@sendgrid/mail');
+// ============================
+// Twilio SMS OTP Setup
+// ============================
+const twilio = require("twilio");
+
+const client = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+// Send OTP via SMS
+async function sendOTPSMS(phone, otpType) {
+  try {
+    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+
+    await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verifications.create({
+        to: formattedPhone,
+        channel: "sms"
+      });
+
+    console.log("📩 SMS OTP sent to:", formattedPhone);
+    return true;
+  } catch (err) {
+    console.error("❌ SMS OTP Error:", err.message);
+    return false;
+  }
+}
+
+// Verify SMS OTP using Twilio
+async function verifyOTPSMS(phone, code) {
+  try {
+    const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+
+    const result = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verificationChecks.create({
+        to: formattedPhone,
+        code
+      });
+
+    return result.status === "approved";
+  } catch (err) {
+    console.error("❌ OTP Verify Error:", err.message);
+    return false;
+  }
+}
 
 // DEBUG: Check API Key
 console.log('📧 SendGrid API Key length:', process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 'MISSING');
@@ -616,19 +664,22 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
   await otpRecord.save();
 
   // ✅ NEW: Send OTP via email if it's an email address
-  let emailSent = false;
+  let sent = false;
+
   if (validateEmail(emailPhone)) {
-    emailSent = await sendOTPEmail(emailPhone, otp, type);
+    sent = await sendOTPEmail(emailPhone, otp, type);
+  } else {
+    sent = await sendOTPSMS(emailPhone, type);
   }
 
   console.log(`📧 OTP for ${emailPhone} (${type}): ${otp}`);
 
   // ✅ UPDATED: Return email status
-  res.json({ 
-    success: true,
-    message: emailSent ? 'Verification code sent to email' : 'Verification code sent successfully',
+  res.json({
+    success: sent,
+    message: sent ? 'Verification code sent successfully' : 'Failed to send verification code',
     debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp,
-    method: emailSent ? 'email' : 'console'
+    method: validateEmail(emailPhone) ? 'email' : 'sms'
   });
 }));
 
@@ -651,7 +702,14 @@ app.post('/api/verify-otp-signup', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Verification code expired' });
   }
 
-  if (otpRecord.otp !== otp) {
+  // SMS OTP verification for phone numbers
+  if (validatePhone(emailPhone)) {
+    const verified = await verifyOTPSMS(emailPhone, otp);
+    if (!verified) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+  }
+  else if (otpRecord.otp !== otp) {
     otpRecord.attempts += 1;
     await otpRecord.save();
     
@@ -719,7 +777,14 @@ app.post('/api/verify-otp', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Verification code expired' });
   }
 
-  if (otpRecord.otp !== otp) {
+  // SMS OTP verification for phone numbers
+  if (validatePhone(emailPhone)) {
+    const verified = await verifyOTPSMS(emailPhone, otp);
+    if (!verified) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+  }
+  else if (otpRecord.otp !== otp) {
     otpRecord.attempts += 1;
     await otpRecord.save();
     
@@ -764,20 +829,23 @@ app.post('/api/resend-otp', asyncHandler(async (req, res) => {
 
   await otpRecord.save();
 
-  // ✅ NEW: Send OTP via email if it's an email address
-  let emailSent = false;
+  // ✅ NEW: Send OTP via email or SMS
+  let sent = false;
+
   if (validateEmail(emailPhone)) {
-    emailSent = await sendOTPEmail(emailPhone, otp, type);
+    sent = await sendOTPEmail(emailPhone, otp, type);
+  } else {
+    sent = await sendOTPSMS(emailPhone, type);
   }
 
   console.log(`📧 New OTP for ${emailPhone} (${type}): ${otp}`);
 
-  // ✅ UPDATED: Return email status
+  // ✅ UPDATED: Return status
   res.json({ 
-    success: true,
-    message: emailSent ? 'Verification code sent to email' : 'Verification code sent successfully',
+    success: sent,
+    message: sent ? 'Verification code sent successfully' : 'Failed to send verification code',
     debugOtp: process.env.NODE_ENV === 'production' ? undefined : otp,
-    method: emailSent ? 'email' : 'console'
+    method: validateEmail(emailPhone) ? 'email' : 'sms'
   });
 }));
 
