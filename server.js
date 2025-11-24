@@ -694,40 +694,51 @@ app.post('/api/verify-otp-signup', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Invalid or expired verification code' });
   }
 
+  // Check expiry
   if (otpRecord.expiresAt < new Date()) {
     await OTP.deleteOne({ _id: otpRecord._id });
     return res.status(400).json({ error: 'Verification code expired' });
   }
 
-if (validateEmail(emailPhone)) {
-    if (otpRecord.otp !== otp)
+  // ==========================
+  // OTP CHECK (Email vs Phone)
+  // ==========================
+  if (validateEmail(emailPhone)) {
+
+      // EMAIL OTP CHECK
+      if (otpRecord.otp !== otp) {
+        otpRecord.attempts += 1;
+        await otpRecord.save();
+
+        if (otpRecord.attempts >= 3) {
+          await OTP.deleteOne({ _id: otpRecord._id });
+          return res.status(400).json({ error: 'Too many failed attempts. Please request a new code.' });
+        }
+
         return res.status(400).json({ error: 'Invalid verification code' });
-} else {
-    const verified = await verifyOTPSMS(emailPhone, otp);
-    if (!verified)
+      }
+
+  } else {
+
+      // PHONE SMS OTP CHECK
+      const verified = await verifyOTPSMS(emailPhone, otp);
+      if (!verified) {
         return res.status(400).json({ error: 'Invalid verification code' });
-}
+      }
 
   }
-  else if (otpRecord.otp !== otp) {
-    otpRecord.attempts += 1;
-    await otpRecord.save();
-    
-    if (otpRecord.attempts >= 3) {
-      await OTP.deleteOne({ _id: otpRecord._id });
-      return res.status(400).json({ error: 'Too many failed attempts. Please request a new code.' });
-    }
-    
-    return res.status(400).json({ error: 'Invalid verification code' });
-  }
 
-  // Check if username already exists
+  // ==========================
+  // Username already exists?
+  // ==========================
   const existingUser = await User.findOne({ username });
   if (existingUser) {
     return res.status(400).json({ error: 'Username already taken' });
   }
 
-  // Create user
+  // ==========================
+  // Create new user
+  // ==========================
   const hashedPassword = await bcrypt.hash(password, 10);
   
   const userData = {
@@ -745,9 +756,12 @@ if (validateEmail(emailPhone)) {
   const newUser = new User(userData);
   await newUser.save();
 
-  // Clean up OTP
+  // Delete OTP
   await OTP.deleteOne({ _id: otpRecord._id });
 
+  // ==========================
+  // Response
+  // ==========================
   res.json({ 
     success: true,
     message: 'Account created successfully',
@@ -758,6 +772,7 @@ if (validateEmail(emailPhone)) {
     }
   });
 }));
+
 
 app.post('/api/verify-otp', asyncHandler(async (req, res) => {
   const { emailPhone, otp, type } = req.body;
