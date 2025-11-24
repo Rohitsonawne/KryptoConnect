@@ -608,62 +608,59 @@ app.get('/auth/facebook/callback',
 );
 
 // ============================
-// OTP APIs (FIXED)
+// OTP - Send OTP (COMPLETE FIXED BLOCK)
 // ============================
 
 app.post('/api/send-otp', asyncHandler(async (req, res) => {
   const { emailPhone, type } = req.body;
-  
+
+  // 1. Required fields
   if (!emailPhone || !type) {
     return res.status(400).json({ error: 'Email/phone and type are required' });
   }
 
-  if (!validateEmailOrPhone(emailPhone)) {
+  // 2. Validate email or phone
+  if (!validateEmail(emailPhone) && !validatePhone(emailPhone)) {
     return res.status(400).json({ error: 'Please enter a valid email or phone number' });
   }
 
-  // Check if user exists (for signup)
+  // 3. Check user existence (SIGNUP)
   if (type === 'signup') {
-    const existingUser = await User.findOne({ 
-      $or: [
-        { email: emailPhone },
-        { phone: emailPhone }
-      ]
+    const existingUser = await User.findOne({
+      $or: [{ email: emailPhone }, { phone: emailPhone }]
     });
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists with this email/phone' });
     }
   }
 
-  // Check if user exists (for login/reset)
+  // 4. Check user existence (LOGIN/RESET)
   if (type === 'login' || type === 'reset') {
-    const user = await User.findOne({ 
-      $or: [
-        { email: emailPhone },
-        { phone: emailPhone }
-      ]
+    const user = await User.findOne({
+      $or: [{ email: emailPhone }, { phone: emailPhone }]
     });
     if (!user) {
       return res.status(404).json({ error: 'No account found with this email/phone' });
     }
   }
 
-  // Delete any existing OTP for this email/phone
+  // 5. Delete previous OTP
   await OTP.deleteMany({ emailPhone });
 
+  // 6. Generate OTP
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
+  // 7. Save OTP
   const otpRecord = new OTP({
     emailPhone,
     otp,
     type,
     expiresAt
   });
-
   await otpRecord.save();
 
-  // ✅ NEW: Send OTP via email if it's an email address
+  // 8. Send OTP via Email or SMS
   let sent = false;
 
   if (validateEmail(emailPhone)) {
@@ -672,9 +669,9 @@ app.post('/api/send-otp', asyncHandler(async (req, res) => {
     sent = await sendOTPSMS(emailPhone, type);
   }
 
-  console.log(`📧 OTP for ${emailPhone} (${type}): ${otp}`);
+  console.log(`📩 OTP for ${emailPhone}: ${otp}`);
 
-  // ✅ UPDATED: Return email status
+  // 9. Response
   res.json({
     success: sent,
     message: sent ? 'Verification code sent successfully' : 'Failed to send verification code',
@@ -702,12 +699,15 @@ app.post('/api/verify-otp-signup', asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Verification code expired' });
   }
 
-  // SMS OTP verification for phone numbers
-  if (validatePhone(emailPhone)) {
+if (validateEmail(emailPhone)) {
+    if (otpRecord.otp !== otp)
+        return res.status(400).json({ error: 'Invalid verification code' });
+} else {
     const verified = await verifyOTPSMS(emailPhone, otp);
-    if (!verified) {
-      return res.status(400).json({ error: 'Invalid verification code' });
-    }
+    if (!verified)
+        return res.status(400).json({ error: 'Invalid verification code' });
+}
+
   }
   else if (otpRecord.otp !== otp) {
     otpRecord.attempts += 1;
@@ -832,11 +832,12 @@ app.post('/api/resend-otp', asyncHandler(async (req, res) => {
   // ✅ NEW: Send OTP via email or SMS
   let sent = false;
 
-  if (validateEmail(emailPhone)) {
+if (validateEmail(emailPhone)) {
     sent = await sendOTPEmail(emailPhone, otp, type);
-  } else {
+} else {
     sent = await sendOTPSMS(emailPhone, type);
-  }
+}
+
 
   console.log(`📧 New OTP for ${emailPhone} (${type}): ${otp}`);
 
